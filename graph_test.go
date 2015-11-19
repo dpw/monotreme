@@ -1,0 +1,302 @@
+package osedax
+
+import (
+	"math/rand"
+	"strconv"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
+)
+
+type mapGraph map[NodeID][]NodeID
+
+func (g mapGraph) Nodes() []NodeID {
+	var res []NodeID
+
+	for n := range g {
+		res = append(res, n)
+	}
+
+	return res
+}
+
+func (g mapGraph) Edges(n NodeID) []NodeID {
+	return g[n]
+}
+
+type edge struct {
+	a, b NodeID
+}
+
+// An undirected graph represented as a set of edges.  The edge pairs
+// are sorted.
+type undirected map[edge]struct{}
+
+func makeEdge(a, b NodeID) edge {
+	if a > b {
+		t := a
+		a = b
+		b = t
+	}
+	return edge{a, b}
+}
+
+func (u undirected) add(a, b NodeID) {
+	u[makeEdge(a, b)] = struct{}{}
+}
+
+func (u undirected) remove(a, b NodeID) {
+	delete(u, makeEdge(a, b))
+}
+
+func (u undirected) toGraph() Graph {
+	g := make(mapGraph)
+
+	// Symmetry
+	for e := range u {
+		g[e.a] = append(g[e.a], e.b)
+		g[e.b] = append(g[e.b], e.a)
+	}
+
+	// Reflexivity
+	for n := range g {
+		g[n] = append(g[n], n)
+	}
+
+	return g
+}
+
+func generateSparse(r *rand.Rand, size int) undirected {
+	u := make(undirected)
+
+	nodes := []NodeID{NodeID("0")}
+
+	// Form a random tree
+	for i := 1; i < size; i++ {
+		n := NodeID(strconv.Itoa(i))
+		u.add(n, nodes[r.Intn(len(nodes))])
+		nodes = append(nodes, n)
+	}
+
+	// Add a few extra edges
+	for i := r.Intn(size); i > 0; i-- {
+		u.add(nodes[r.Intn(len(nodes))], nodes[r.Intn(len(nodes))])
+	}
+
+	return u
+}
+
+func generateDense(r *rand.Rand, size int) undirected {
+	u := make(undirected)
+	nodes := make([]NodeID, size)
+
+	for i := 0; i < size; i++ {
+		nodes[i] = NodeID(strconv.Itoa(i))
+	}
+
+	// Form a fully-connected graph
+	for i := 0; i < size; i++ {
+		for j := 0; j < i; j++ {
+			u.add(nodes[i], nodes[j])
+		}
+	}
+
+	// Remove some edges
+	for i := r.Intn(size); i > 0; i-- {
+		a := r.Intn(len(nodes)-1) + 1
+		u.remove(nodes[r.Intn(len(nodes))], nodes[r.Intn(a)])
+	}
+
+	return u
+}
+
+func checkShortestPaths(t *testing.T, g Graph, sps map[NodeID]ShortestPath) {
+	// This looks like a lot of code - far more than the shortest
+	// path algorithm itself!  The main thing we are checking is
+	// that the distance to each node is the lowest value
+	// consistent with the distances to its predecessor nodes.
+
+	isps := make(map[NodeID]struct {
+		minDistance int
+		initials    map[NodeID]struct{}
+	})
+	foundDistZero := false
+
+	for _, n := range g.Nodes() {
+		nsp, present := sps[n]
+		if !present {
+			/// n was not reachable
+			continue
+		}
+
+		if nsp.Distance == 0 {
+			require.False(t, foundDistZero)
+			foundDistZero = true
+		}
+
+		for _, m := range g.Edges(n) {
+			isp, present := isps[m]
+			if present {
+				if isp.minDistance < nsp.Distance+1 {
+					// already found a shorter
+					// implied distance to m
+					continue
+				}
+
+				if nsp.Distance+1 < isp.minDistance {
+					isp.minDistance = nsp.Distance + 1
+					isp.initials = nil
+				}
+			} else {
+				isp.minDistance = nsp.Distance + 1
+			}
+
+			initial := nsp.Initial
+			if nsp.Distance == 0 {
+				initial = m
+			}
+
+			if isp.initials == nil {
+				isp.initials = make(map[NodeID]struct{})
+			}
+
+			isp.initials[initial] = struct{}{}
+			isps[m] = isp
+		}
+	}
+
+	for n, isp := range isps {
+		require.Contains(t, sps, n)
+		if sps[n].Distance != 0 {
+			require.Equal(t, isp.minDistance, sps[n].Distance,
+				"Incorrect distance on %s", n)
+			require.Contains(t, isp.initials, sps[n].Initial)
+		} else {
+			require.Equal(t, n, sps[n].Initial)
+		}
+	}
+
+	// implied reachability should match
+	for n, sp := range sps {
+		if sp.Distance != 0 {
+			require.Contains(t, isps, n)
+		}
+	}
+}
+
+func randomNode(g Graph, r *rand.Rand) NodeID {
+	nodes := g.Nodes()
+	return nodes[r.Intn(len(nodes))]
+}
+
+func rng() *rand.Rand {
+	return rand.New(rand.NewSource(time.Now().UnixNano()))
+}
+
+func TestFindShortestPaths(t *testing.T) {
+	r := rng()
+
+	for i := 0; i < 100; i++ {
+		g := generateSparse(r, 10).toGraph()
+		checkShortestPaths(t, g, FindShortestPaths(g, randomNode(g, r)))
+
+		g = generateDense(r, 10).toGraph()
+		checkShortestPaths(t, g, FindShortestPaths(g, randomNode(g, r)))
+	}
+}
+
+// Find the eccentricity of a node: the maximum shortest path to
+// another node.
+func eccentricity(g Graph, n NodeID) int {
+	max := 0
+
+	for _, sp := range FindShortestPaths(g, n) {
+		if sp.Distance > max {
+			max = sp.Distance
+		}
+	}
+
+	return max
+}
+
+// Find the true central nodes: those with minimal eccentricity.
+func centralNodes(g Graph) []NodeID {
+	minEcc := MaxInt
+	var res []NodeID
+
+	for _, n := range g.Nodes() {
+		ecc := eccentricity(g, n)
+		if ecc <= minEcc {
+			if ecc < minEcc {
+				minEcc = ecc
+				res = nil
+			}
+			res = append(res, n)
+		}
+	}
+
+	return res
+}
+
+func TestFindPseudoCentralNode(t *testing.T) {
+	r := rng()
+
+	// Test the case where the all nodes are witnesses, in which
+	// case the pseudo-central node is the central node with
+	// lowest id
+	for i := 0; i < 100; i++ {
+		g := generateSparse(r, 10).toGraph()
+		c := FindPseudoCentralNode(g, 10)
+
+		// central node is one with minimal eccentricity
+		require.Contains(t, SortNodeIDs(centralNodes(g))[0], c)
+
+		g = generateDense(r, 10).toGraph()
+		c = FindPseudoCentralNode(g, 10)
+
+		// central node is one with minimal eccentricity
+		require.Contains(t, SortNodeIDs(centralNodes(g))[0], c)
+	}
+}
+
+type linearGraph int
+
+func (g linearGraph) Nodes() []NodeID {
+	var res []NodeID
+
+	for i := 0; i < int(g); i++ {
+		res = append(res, NodeID(strconv.Itoa(i)))
+	}
+
+	return res
+}
+
+func (g linearGraph) Edges(node NodeID) []NodeID {
+	n, err := strconv.Atoi(string(node))
+	if err != nil {
+		panic(string(node))
+	}
+
+	res := make([]NodeID, 0, 0)
+
+	if n > 0 {
+		res = append(res, NodeID(strconv.Itoa(n-1)))
+	}
+
+	res = append(res, node)
+
+	if n < int(g)-1 {
+		res = append(res, NodeID(strconv.Itoa(n+1)))
+
+	}
+
+	return res
+}
+
+func TestFindPseudoCentralNodeOfLinearGraph(t *testing.T) {
+	require.Equal(t, NodeID("50"), FindPseudoCentralNode(linearGraph(101),
+		10))
+	require.Equal(t, NodeID("50"), FindPseudoCentralNode(linearGraph(101),
+		11))
+}
