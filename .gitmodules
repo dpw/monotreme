@@ -1,0 +1,12 @@
+[submodule "vendor/github.com/stretchr/testify"]
+	path = vendor/github.com/stretchr/testify
+	url = https://github.com/stretchr/testify
+[submodule "vendor/github.com/davecgh/go-spew"]
+	path = vendor/github.com/davecgh/go-spew
+	url = https://github.com/davecgh/go-spew
+[submodule "vendor/github.com/pmezard/go-difflib"]
+	path = vendor/github.com/pmezard/go-difflib
+	url = https://github.com/pmezard/go-difflib
+[submodule "vendor/github.com/stretchr/objx"]
+	path = vendor/github.com/stretchr/objx
+	url = https://github.com/stretchr/objx
