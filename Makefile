@@ -1,5 +1,5 @@
 gofiles=$(shell find -name . "*.go")
-pkg=github.com/dpw/osedax
+pkg=github.com/dpw/monotreme
 
 get_vendor_submodules=@if [ -z "$$(find vendor -type f -print -quit)" ] ; then git submodule update --init ; fi
 
