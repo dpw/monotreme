@@ -4,14 +4,7 @@ import (
 	"sort"
 )
 
-// For routing
-
-// Spanning tree:
-
-// Pick N arbitrary nodes
-// Calculate distance from those to all other nodes
-
-// Calculate depth first
+// XXX determinism comments
 
 type NodeID string
 
@@ -96,7 +89,7 @@ func SortNodeIDs(ids []NodeID) []NodeID {
 
 func FindPseudoCentralNode(g Graph, witnesses int) NodeID {
 	// The pseudo-eccentricity for each node: the maximum distance
-	// from a witness
+	// from a witness node
 	eccs := make(map[NodeID]int)
 
 	fillEccsFrom := func(n NodeID) {
@@ -139,6 +132,147 @@ func FindPseudoCentralNode(g Graph, witnesses int) NodeID {
 			minEcc = e
 			res = n
 		}
+	}
+
+	return res
+}
+
+type TreeNode struct {
+	id       NodeID
+	parent   *TreeNode
+	children []*TreeNode
+}
+
+type Tree map[NodeID]*TreeNode
+
+func (t Tree) Nodes() []NodeID {
+	var res []NodeID
+	for id, _ := range t {
+		res = append(res, id)
+	}
+	return res
+}
+
+func (t Tree) Edges(id NodeID) []NodeID {
+	var res []NodeID
+	for _, tn := range t[id].children {
+		res = append(res, tn.id)
+	}
+	return res
+}
+
+func MakeBushySpanningTree(g Graph, root NodeID, softChildLimit int) Tree {
+	type nodeState struct {
+		id NodeID
+
+		// If the node has been added to the tree:
+		treeNode *TreeNode
+		depth    int
+
+		// For a node reached but not added, which nodes this
+		// was reached from, i.e. potential parents
+		reachedFrom  []*nodeState
+		reachedIndex int
+	}
+
+	rootNode := &nodeState{id: root, treeNode: &TreeNode{id: root}}
+	nodes := map[NodeID]*nodeState{root: rootNode}
+	todo := []*nodeState{rootNode}
+	var todo_next []*nodeState
+
+	// nodes reached but not yet added to the tree
+	var reached []*nodeState
+
+	removeReached := func(index int) {
+		l := len(reached) - 1
+		reached[index] = reached[l]
+		reached[index].reachedIndex = index
+		reached = reached[:l]
+	}
+
+	attachTreeNode := func(node *nodeState, parent *nodeState) {
+		tn := &TreeNode{id: node.id, parent: parent.treeNode}
+		tn.parent.children = append(tn.parent.children, tn)
+		node.treeNode = tn
+		node.depth = parent.depth + 1
+		todo_next = append(todo_next, node)
+	}
+
+	visit := func(id NodeID, parent *nodeState) {
+		node := nodes[id]
+		if node == nil {
+			node = &nodeState{id: id}
+			nodes[id] = node
+		}
+
+		if node.treeNode != nil {
+			// already added
+			return
+		}
+
+		// Does the candidate parent already have too many
+		// children to add this one?
+		if len(parent.treeNode.children) >= softChildLimit {
+			if node.reachedFrom == nil {
+				node.reachedIndex = len(reached)
+				reached = append(reached, node)
+			}
+
+			node.reachedFrom = append(node.reachedFrom, parent)
+			return
+		}
+
+		if node.reachedFrom != nil {
+			// node has been reached already, but that
+			// gets overridden by adding it now
+			node.reachedFrom = nil
+			removeReached(node.reachedIndex)
+		}
+
+		attachTreeNode(node, parent)
+	}
+
+	for {
+		for _, node := range todo {
+			for _, child := range g.Edges(node.treeNode.id) {
+				visit(child, node)
+			}
+		}
+
+		if len(todo_next) > 0 {
+			temp := todo
+			todo = todo_next
+			todo_next = temp[:0]
+			continue
+		}
+
+		if len(reached) == 0 {
+			break
+		}
+
+		// Have some reached-but-not-added nodes to add
+		node := reached[0]
+
+		// heuristically choose a parent node
+		bestParent := node.reachedFrom[0]
+		bestScore := bestParent.depth +
+			len(bestParent.treeNode.children)
+		for _, parent := range node.reachedFrom[1:] {
+			score := parent.depth + len(parent.treeNode.children)
+			if score < bestScore {
+				bestScore = score
+				bestParent = parent
+			}
+		}
+
+		node.reachedFrom = nil
+		removeReached(0)
+		attachTreeNode(node, bestParent)
+	}
+
+	res := make(Tree)
+	for id, node := range nodes {
+		res[id] = node.treeNode
 	}
 
 	return res

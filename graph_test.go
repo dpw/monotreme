@@ -300,3 +300,46 @@ func TestFindPseudoCentralNodeOfLinearGraph(t *testing.T) {
 	require.Equal(t, NodeID("50"), FindPseudoCentralNode(linearGraph(101),
 		11))
 }
+
+func reachableNodes(g Graph, start NodeID) []NodeID {
+	reached := make(map[NodeID]struct{})
+	visitReachableNode(g, start, reached)
+
+	var res []NodeID
+	for id, _ := range reached {
+		res = append(res, id)
+	}
+	return res
+}
+
+func visitReachableNode(g Graph, n NodeID, reached map[NodeID]struct{}) {
+	if _, present := reached[n]; present {
+		return
+	}
+
+	reached[n] = struct{}{}
+
+	for _, m := range g.Edges(n) {
+		visitReachableNode(g, m, reached)
+	}
+}
+
+func TestMakeBushySpanningTree(t *testing.T) {
+	r := rng()
+
+	testcase := func(g Graph, witnesses, limit int) {
+		root := FindPseudoCentralNode(g, witnesses)
+		tr := MakeBushySpanningTree(g, root, limit)
+		gnodes := SortNodeIDs(g.Nodes())
+		require.Equal(t, gnodes, SortNodeIDs(tr.Nodes()))
+		require.Equal(t, gnodes, SortNodeIDs(reachableNodes(tr, root)))
+	}
+
+	for i := 0; i < 100; i++ {
+		testcase(generateSparse(r, 10).toGraph(), 4, 2)
+		testcase(generateDense(r, 10).toGraph(), 4, 2)
+	}
+
+	testcase(generateSparse(r, 100).toGraph(), 10, 3)
+	testcase(generateDense(r, 100).toGraph(), 10, 3)
+}
