@@ -4,11 +4,12 @@ import (
 	"sort"
 )
 
-// XXX determinism comments
-
 type NodeID string
 
 // A graph is a function that produces the outgoing edges from a node
+//
+// A Graph is stable if the NodeID arrays returned by the methods
+// always appear in the same order.
 type Graph interface {
 	// Get the list of nodes of the graph.  Callers should not
 	// modify the result.
@@ -23,6 +24,8 @@ type ShortestPath struct {
 }
 
 // Depth-first search to find shortest paths
+//
+// Stable if the Graph g is stable.
 func FindShortestPaths(g Graph, start NodeID) map[NodeID]ShortestPath {
 	type todoItem struct {
 		node    NodeID
@@ -87,6 +90,8 @@ func SortNodeIDs(ids []NodeID) []NodeID {
 	return ids
 }
 
+// Find a pseudo-centrol node: The node with lowest eccentricity with
+// respect to a set of witness nodes.
 func FindPseudoCentralNode(g Graph, witnesses int) NodeID {
 	// The pseudo-eccentricity for each node: the maximum distance
 	// from a witness node
@@ -161,6 +166,13 @@ func (t Tree) Edges(id NodeID) []NodeID {
 	return res
 }
 
+// Produce a spanning tree for the graph that attempts to:
+//
+// - minimise maximum distance from the given root node, and
+//
+// - constrain the degree of each node according to softChildLimit
+//
+// Stable if the graph is stable.
 func MakeBushySpanningTree(g Graph, root NodeID, softChildLimit int) Tree {
 	type nodeState struct {
 		id NodeID

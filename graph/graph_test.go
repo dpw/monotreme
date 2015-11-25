@@ -2,6 +2,7 @@ package graph
 
 import (
 	"math/rand"
+	"reflect"
 	"strconv"
 	"testing"
 	"time"
@@ -18,7 +19,7 @@ func (g mapGraph) Nodes() []NodeID {
 		res = append(res, n)
 	}
 
-	return res
+	return SortNodeIDs(res)
 }
 
 func (g mapGraph) Edges(n NodeID) []NodeID {
@@ -197,12 +198,18 @@ func rng() *rand.Rand {
 func TestFindShortestPaths(t *testing.T) {
 	r := rng()
 
-	for i := 0; i < 100; i++ {
-		g := generateSparse(r, 10).toGraph()
-		checkShortestPaths(t, g, FindShortestPaths(g, randomNode(g, r)))
+	check := func(g Graph) {
+		n := randomNode(g, r)
+		sp := FindShortestPaths(g, n)
+		checkShortestPaths(t, g, sp)
 
-		g = generateDense(r, 10).toGraph()
-		checkShortestPaths(t, g, FindShortestPaths(g, randomNode(g, r)))
+		// FindShortestPaths is stable:
+		require.True(t, reflect.DeepEqual(sp, FindShortestPaths(g, n)))
+	}
+
+	for i := 0; i < 100; i++ {
+		check(generateSparse(r, 10).toGraph())
+		check(generateDense(r, 10).toGraph())
 	}
 }
 
@@ -245,18 +252,19 @@ func TestFindPseudoCentralNode(t *testing.T) {
 	// Test the case where the all nodes are witnesses, in which
 	// case the pseudo-central node is the central node with
 	// lowest id
+
+	check := func(g Graph) {
+		require.Contains(t, SortNodeIDs(centralNodes(g))[0],
+			FindPseudoCentralNode(g, 10))
+
+		// check stability
+		require.Equal(t, FindPseudoCentralNode(g, 3),
+			FindPseudoCentralNode(g, 3))
+	}
+
 	for i := 0; i < 100; i++ {
-		g := generateSparse(r, 10).toGraph()
-		c := FindPseudoCentralNode(g, 10)
-
-		// central node is one with minimal eccentricity
-		require.Contains(t, SortNodeIDs(centralNodes(g))[0], c)
-
-		g = generateDense(r, 10).toGraph()
-		c = FindPseudoCentralNode(g, 10)
-
-		// central node is one with minimal eccentricity
-		require.Contains(t, SortNodeIDs(centralNodes(g))[0], c)
+		check(generateSparse(r, 10).toGraph())
+		check(generateDense(r, 10).toGraph())
 	}
 }
 
@@ -324,22 +332,42 @@ func visitReachableNode(g Graph, n NodeID, reached map[NodeID]struct{}) {
 	}
 }
 
+func graphsEqual(g, h Graph) bool {
+	if !reflect.DeepEqual(SortNodeIDs(g.Nodes()), SortNodeIDs(h.Nodes())) {
+		return false
+	}
+
+	for _, n := range g.Nodes() {
+		if !reflect.DeepEqual(SortNodeIDs(g.Edges(n)),
+			SortNodeIDs(h.Edges(n))) {
+			return false
+		}
+	}
+
+	return true
+}
+
 func TestMakeBushySpanningTree(t *testing.T) {
 	r := rng()
 
-	testcase := func(g Graph, witnesses, limit int) {
+	check := func(g Graph, witnesses, limit int) {
 		root := FindPseudoCentralNode(g, witnesses)
 		tr := MakeBushySpanningTree(g, root, limit)
 		gnodes := SortNodeIDs(g.Nodes())
 		require.Equal(t, gnodes, SortNodeIDs(tr.Nodes()))
 		require.Equal(t, gnodes, SortNodeIDs(reachableNodes(tr, root)))
+
+		// Stability
+		require.True(t, graphsEqual(tr,
+			MakeBushySpanningTree(g, root, limit)))
 	}
 
 	for i := 0; i < 100; i++ {
-		testcase(generateSparse(r, 10).toGraph(), 4, 2)
-		testcase(generateDense(r, 10).toGraph(), 4, 2)
+		check(generateSparse(r, 10).toGraph(), 4, 2)
+		check(generateDense(r, 10).toGraph(), 4, 2)
 	}
 
-	testcase(generateSparse(r, 100).toGraph(), 10, 3)
-	testcase(generateDense(r, 100).toGraph(), 10, 3)
+	// Test on some nice bbig graphs, for luck
+	check(generateSparse(r, 100).toGraph(), 10, 3)
+	check(generateDense(r, 100).toGraph(), 10, 3)
 }
