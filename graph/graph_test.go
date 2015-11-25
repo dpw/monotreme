@@ -1,4 +1,4 @@
-package osedax
+package graph
 
 import (
 	"math/rand"

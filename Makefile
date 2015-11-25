@@ -27,3 +27,8 @@ cover:
 	        go test -coverprofile=cover/$$d.out $$p ; \
 	        go tool cover -html=cover/$$d.out -o cover/$$d.html ; \
 	    done
+
+.PHONY: clean
+clean::
+	rm -rf cover build
+
