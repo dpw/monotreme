@@ -347,6 +347,27 @@ func graphsEqual(g, h Graph) bool {
 	return true
 }
 
+// Validate a tree
+func checkTree(t *testing.T, tree Tree, root NodeID) {
+	copy := make(Tree)
+	for k, v := range tree {
+		copy[k] = v
+	}
+
+	checkTreeNode(t, tree[root], nil, copy)
+	require.Len(t, copy, 0)
+}
+
+func checkTreeNode(t *testing.T, node, parent *TreeNode, tree Tree) {
+	require.Equal(t, node.parent, parent)
+	require.Equal(t, node, tree[node.id])
+	delete(tree, node.id)
+
+	for _, child := range node.children {
+		checkTreeNode(t, child, node, tree)
+	}
+}
+
 func TestMakeBushySpanningTree(t *testing.T) {
 	r := rng()
 
@@ -356,6 +377,7 @@ func TestMakeBushySpanningTree(t *testing.T) {
 		gnodes := SortNodeIDs(g.Nodes())
 		require.Equal(t, gnodes, SortNodeIDs(tr.Nodes()))
 		require.Equal(t, gnodes, SortNodeIDs(reachableNodes(tr, root)))
+		checkTree(t, tr, root)
 
 		// Stability
 		require.True(t, graphsEqual(tr,
