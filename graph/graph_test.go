@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+
+	. "github.com/dpw/monotreme/rudiments"
 )
 
 type mapGraph map[NodeID][]NodeID

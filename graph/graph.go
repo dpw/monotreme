@@ -2,14 +2,13 @@ package graph
 
 import (
 	"sort"
+
+	. "github.com/dpw/monotreme/rudiments"
 )
 
-type NodeID string
-
-// A graph is a function that produces the outgoing edges from a node
-//
-// A Graph is stable if the NodeID arrays returned by the methods
-// always appear in the same order.
+// // A graph is a set of nodes, and a function that produces the
+// outgoing edges from a node.  A Graph is /stable/ if the NodeID
+// arrays returned by the methods always appear in the same order.
 type Graph interface {
 	// Get the list of nodes of the graph.  Callers should not
 	// modify the result.
