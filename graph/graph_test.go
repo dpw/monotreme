@@ -377,13 +377,14 @@ func TestMakeBushySpanningTree(t *testing.T) {
 		root := FindPseudoCentralNode(g, witnesses)
 		tr := MakeBushySpanningTree(g, root, limit)
 		gnodes := SortNodeIDs(g.Nodes())
-		require.Equal(t, gnodes, SortNodeIDs(tr.Nodes()))
-		require.Equal(t, gnodes, SortNodeIDs(reachableNodes(tr, root)))
+		require.Equal(t, gnodes, SortNodeIDs(tr.Directed().Nodes()))
+		require.Equal(t, gnodes,
+			SortNodeIDs(reachableNodes(tr.Directed(), root)))
 		checkTree(t, tr, root)
 
 		// Stability
-		require.True(t, graphsEqual(tr,
-			MakeBushySpanningTree(g, root, limit)))
+		require.True(t, graphsEqual(tr.Directed(),
+			MakeBushySpanningTree(g, root, limit).Directed()))
 	}
 
 	for i := 0; i < 100; i++ {

@@ -154,12 +154,42 @@ func (t Tree) Nodes() []NodeID {
 	for id, _ := range t {
 		res = append(res, id)
 	}
+	return SortNodeIDs(res)
+}
+
+type directedTree struct {
+	Tree
+}
+
+func (t Tree) Directed() Graph {
+	return directedTree{t}
+}
+
+func (t directedTree) Edges(id NodeID) []NodeID {
+	var res []NodeID
+	for _, tn := range t.Tree[id].children {
+		res = append(res, tn.id)
+	}
 	return res
 }
 
-func (t Tree) Edges(id NodeID) []NodeID {
+type undirectedTree struct {
+	Tree
+}
+
+func (t Tree) Undirected() Graph {
+	return undirectedTree{t}
+}
+
+func (t undirectedTree) Edges(id NodeID) []NodeID {
+	tn := t.Tree[id]
 	var res []NodeID
-	for _, tn := range t[id].children {
+
+	if tn.parent != nil {
+		res = []NodeID{tn.parent.id}
+	}
+
+	for _, tn := range tn.children {
 		res = append(res, tn.id)
 	}
 	return res
