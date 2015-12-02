@@ -318,3 +318,35 @@ func MakeBushySpanningTree(g Graph, root NodeID, softChildLimit int) Tree {
 
 	return res
 }
+
+type reachableGraph struct {
+	nodes []NodeID
+	edges map[NodeID][]NodeID
+}
+
+func (g *reachableGraph) Nodes() []NodeID {
+	return g.nodes
+}
+
+func (g *reachableGraph) Edges(n NodeID) []NodeID {
+	return g.edges[n]
+}
+
+func (g *reachableGraph) visit(n NodeID, edges func(NodeID) []NodeID) {
+	if _, present := g.edges[n]; present {
+		return
+	}
+
+	g.nodes = append(g.nodes, n)
+	e := edges(n)
+	g.edges[n] = e
+	for _, m := range e {
+		g.visit(m, edges)
+	}
+}
+
+func ReachableGraph(start NodeID, edges func(NodeID) []NodeID) Graph {
+	res := &reachableGraph{edges: make(map[NodeID][]NodeID)}
+	res.visit(start, edges)
+	return res
+}

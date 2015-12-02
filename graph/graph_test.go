@@ -311,29 +311,6 @@ func TestFindPseudoCentralNodeOfLinearGraph(t *testing.T) {
 		11))
 }
 
-func reachableNodes(g Graph, start NodeID) []NodeID {
-	reached := make(map[NodeID]struct{})
-	visitReachableNode(g, start, reached)
-
-	var res []NodeID
-	for id, _ := range reached {
-		res = append(res, id)
-	}
-	return res
-}
-
-func visitReachableNode(g Graph, n NodeID, reached map[NodeID]struct{}) {
-	if _, present := reached[n]; present {
-		return
-	}
-
-	reached[n] = struct{}{}
-
-	for _, m := range g.Edges(n) {
-		visitReachableNode(g, m, reached)
-	}
-}
-
 func graphsEqual(g, h Graph) bool {
 	if !reflect.DeepEqual(SortNodeIDs(g.Nodes()), SortNodeIDs(h.Nodes())) {
 		return false
@@ -378,8 +355,8 @@ func TestMakeBushySpanningTree(t *testing.T) {
 		tr := MakeBushySpanningTree(g, root, limit)
 		gnodes := SortNodeIDs(g.Nodes())
 		require.Equal(t, gnodes, SortNodeIDs(tr.Directed().Nodes()))
-		require.Equal(t, gnodes,
-			SortNodeIDs(reachableNodes(tr.Directed(), root)))
+		r := ReachableGraph(root, tr.Undirected().Edges)
+		require.Equal(t, gnodes, SortNodeIDs(r.Nodes()))
 		checkTree(t, tr, root)
 
 		// Stability
@@ -392,7 +369,7 @@ func TestMakeBushySpanningTree(t *testing.T) {
 		check(generateDense(r, 10).toGraph(), 4, 2)
 	}
 
-	// Test on some nice bbig graphs, for luck
+	// Test on some nice big graphs, for luck
 	check(generateSparse(r, 100).toGraph(), 10, 3)
 	check(generateDense(r, 100).toGraph(), 10, 3)
 }
