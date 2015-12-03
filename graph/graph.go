@@ -13,6 +13,9 @@ type Graph interface {
 	// Get the list of nodes of the graph.  Callers should not
 	// modify the result.
 	Nodes() []NodeID
+
+	// Get the edges from the given node.  Returns nil for a node
+	// not in the graph.
 	Edges(NodeID) []NodeID
 }
 
@@ -166,10 +169,16 @@ func (t Tree) Directed() Graph {
 }
 
 func (t directedTree) Edges(id NodeID) []NodeID {
-	var res []NodeID
-	for _, tn := range t.Tree[id].children {
-		res = append(res, tn.id)
+	tn := t.Tree[id]
+	if tn == nil {
+		return nil
 	}
+
+	var res []NodeID
+	for _, child := range tn.children {
+		res = append(res, child.id)
+	}
+
 	return res
 }
 
@@ -183,15 +192,19 @@ func (t Tree) Undirected() Graph {
 
 func (t undirectedTree) Edges(id NodeID) []NodeID {
 	tn := t.Tree[id]
-	var res []NodeID
+	if tn == nil {
+		return nil
+	}
 
+	var res []NodeID
 	if tn.parent != nil {
 		res = []NodeID{tn.parent.id}
 	}
 
-	for _, tn := range tn.children {
-		res = append(res, tn.id)
+	for _, child := range tn.children {
+		res = append(res, child.id)
 	}
+
 	return res
 }
 
