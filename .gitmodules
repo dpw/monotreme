@@ -10,3 +10,6 @@
 [submodule "vendor/github.com/stretchr/objx"]
 	path = vendor/github.com/stretchr/objx
 	url = https://github.com/stretchr/objx
+[submodule "vendor/github.com/willf/bitset"]
+	path = vendor/github.com/willf/bitset
+	url = https://github.com/willf/bitset.git
