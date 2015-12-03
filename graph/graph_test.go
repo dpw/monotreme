@@ -24,6 +24,13 @@ func mapGraph(g map[NodeID][]NodeID) Graph {
 	}}
 }
 
+func TestTranspose(t *testing.T) {
+	g := mapGraph(map[NodeID][]NodeID{"a": {"b"}, "b": {}})
+	tg := Transpose(g)
+	require.True(t, graphsEqual(tg,
+		mapGraph(map[NodeID][]NodeID{"a": {}, "b": {"a"}})))
+}
+
 type edge struct {
 	a, b NodeID
 }

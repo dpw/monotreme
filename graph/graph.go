@@ -20,6 +20,20 @@ type Graph struct {
 	Edges func(NodeID) []NodeID
 }
 
+func Transpose(g Graph) Graph {
+	tg := make(map[NodeID][]NodeID)
+
+	for _, n := range g.Nodes {
+		for _, m := range g.Edges(n) {
+			tg[m] = append(tg[m], n)
+		}
+	}
+
+	return Graph{Nodes: g.Nodes, Edges: func(n NodeID) []NodeID {
+		return tg[n]
+	}}
+}
+
 // The shortest path result for a particular node
 type ShortestPath struct {
 	Distance int
@@ -97,24 +111,26 @@ func SortNodeIDs(ids []NodeID) []NodeID {
 // respect to a set of witness nodes.
 func FindPseudoCentralNode(g Graph, witnesses int) NodeID {
 	// The pseudo-eccentricity for each node: the maximum distance
-	// from a witness node
+	// to a witness node
 	eccs := make(map[NodeID]int)
 
+	// Transpose the graph in order to find shortest paths from
+	// candidate pseudo-central nodes to the witnesses:
+	tg := Transpose(g)
 	fillEccsFrom := func(n NodeID) {
-		for m, sp := range FindShortestPaths(g, n) {
+		for m, sp := range FindShortestPaths(tg, n) {
 			if sp.Distance > eccs[m] {
 				eccs[m] = sp.Distance
 			}
 		}
 	}
 
-	nodes := g.Nodes
-	if len(nodes) <= witnesses {
-		for _, n := range nodes {
+	if len(g.Nodes) <= witnesses {
+		for _, n := range g.Nodes {
 			fillEccsFrom(n)
 		}
 	} else {
-		nodes = SortNodeIDs(nodes)
+		nodes := SortNodeIDs(g.Nodes)
 
 		a := 0
 		b := len(nodes) - 1
