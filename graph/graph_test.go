@@ -12,20 +12,16 @@ import (
 	. "github.com/dpw/monotreme/rudiments"
 )
 
-type mapGraph map[NodeID][]NodeID
-
-func (g mapGraph) Nodes() []NodeID {
+func mapGraph(g map[NodeID][]NodeID) Graph {
 	var res []NodeID
 
 	for n := range g {
 		res = append(res, n)
 	}
 
-	return SortNodeIDs(res)
-}
-
-func (g mapGraph) Edges(n NodeID) []NodeID {
-	return g[n]
+	return Graph{Nodes: SortNodeIDs(res), Edges: func(id NodeID) []NodeID {
+		return g[id]
+	}}
 }
 
 type edge struct {
@@ -54,7 +50,7 @@ func (u undirected) remove(a, b NodeID) {
 }
 
 func (u undirected) toGraph() Graph {
-	g := make(mapGraph)
+	g := make(map[NodeID][]NodeID)
 
 	// Symmetry
 	for e := range u {
@@ -67,7 +63,7 @@ func (u undirected) toGraph() Graph {
 		g[n] = append(g[n], n)
 	}
 
-	return g
+	return mapGraph(g)
 }
 
 func generateSparse(r *rand.Rand, size int) undirected {
@@ -126,7 +122,7 @@ func checkShortestPaths(t *testing.T, g Graph, sps map[NodeID]ShortestPath) {
 	})
 	foundDistZero := false
 
-	for _, n := range g.Nodes() {
+	for _, n := range g.Nodes {
 		nsp, present := sps[n]
 		if !present {
 			/// n was not reachable
@@ -189,8 +185,7 @@ func checkShortestPaths(t *testing.T, g Graph, sps map[NodeID]ShortestPath) {
 }
 
 func randomNode(g Graph, r *rand.Rand) NodeID {
-	nodes := g.Nodes()
-	return nodes[r.Intn(len(nodes))]
+	return g.Nodes[r.Intn(len(g.Nodes))]
 }
 
 func rng() *rand.Rand {
@@ -234,7 +229,7 @@ func centralNodes(g Graph) []NodeID {
 	minEcc := MaxInt
 	var res []NodeID
 
-	for _, n := range g.Nodes() {
+	for _, n := range g.Nodes {
 		ecc := eccentricity(g, n)
 		if ecc <= minEcc {
 			if ecc < minEcc {
@@ -270,38 +265,18 @@ func TestFindPseudoCentralNode(t *testing.T) {
 	}
 }
 
-type linearGraph int
+func linearGraph(n int) Graph {
+	g := make(map[NodeID][]NodeID)
+	prev := NodeID(strconv.Itoa(0))
 
-func (g linearGraph) Nodes() []NodeID {
-	var res []NodeID
-
-	for i := 0; i < int(g); i++ {
-		res = append(res, NodeID(strconv.Itoa(i)))
+	for i := 1; i < n; i++ {
+		next := NodeID(strconv.Itoa(i))
+		g[prev] = append(g[prev], next)
+		g[next] = append(g[next], prev)
+		prev = next
 	}
 
-	return res
-}
-
-func (g linearGraph) Edges(node NodeID) []NodeID {
-	n, err := strconv.Atoi(string(node))
-	if err != nil {
-		panic(string(node))
-	}
-
-	res := make([]NodeID, 0, 0)
-
-	if n > 0 {
-		res = append(res, NodeID(strconv.Itoa(n-1)))
-	}
-
-	res = append(res, node)
-
-	if n < int(g)-1 {
-		res = append(res, NodeID(strconv.Itoa(n+1)))
-
-	}
-
-	return res
+	return mapGraph(g)
 }
 
 func TestFindPseudoCentralNodeOfLinearGraph(t *testing.T) {
@@ -312,11 +287,11 @@ func TestFindPseudoCentralNodeOfLinearGraph(t *testing.T) {
 }
 
 func graphsEqual(g, h Graph) bool {
-	if !reflect.DeepEqual(SortNodeIDs(g.Nodes()), SortNodeIDs(h.Nodes())) {
+	if !reflect.DeepEqual(SortNodeIDs(g.Nodes), SortNodeIDs(h.Nodes)) {
 		return false
 	}
 
-	for _, n := range g.Nodes() {
+	for _, n := range g.Nodes {
 		if !reflect.DeepEqual(SortNodeIDs(g.Edges(n)),
 			SortNodeIDs(h.Edges(n))) {
 			return false
@@ -353,10 +328,10 @@ func TestMakeBushySpanningTree(t *testing.T) {
 	check := func(g Graph, witnesses, limit int) {
 		root := FindPseudoCentralNode(g, witnesses)
 		tr := MakeBushySpanningTree(g, root, limit)
-		gnodes := SortNodeIDs(g.Nodes())
-		require.Equal(t, gnodes, SortNodeIDs(tr.Directed().Nodes()))
+		gnodes := SortNodeIDs(g.Nodes)
+		require.Equal(t, gnodes, SortNodeIDs(tr.Directed().Nodes))
 		r := ReachableGraph(root, tr.Undirected().Edges)
-		require.Equal(t, gnodes, SortNodeIDs(r.Nodes()))
+		require.Equal(t, gnodes, SortNodeIDs(r.Nodes))
 		checkTree(t, tr, root)
 
 		// Stability

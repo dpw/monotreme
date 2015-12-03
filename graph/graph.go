@@ -8,15 +8,16 @@ import (
 
 // // A graph is a set of nodes, and a function that produces the
 // outgoing edges from a node.  A Graph is /stable/ if the NodeID
-// arrays returned by the methods always appear in the same order.
-type Graph interface {
+// arrays returned by the Edge function always appear in the same
+// order.
+type Graph struct {
 	// Get the list of nodes of the graph.  Callers should not
 	// modify the result.
-	Nodes() []NodeID
+	Nodes []NodeID
 
 	// Get the edges from the given node.  Returns nil for a node
 	// not in the graph.
-	Edges(NodeID) []NodeID
+	Edges func(NodeID) []NodeID
 }
 
 // The shortest path result for a particular node
@@ -107,7 +108,7 @@ func FindPseudoCentralNode(g Graph, witnesses int) NodeID {
 		}
 	}
 
-	nodes := g.Nodes()
+	nodes := g.Nodes
 	if len(nodes) <= witnesses {
 		for _, n := range nodes {
 			fillEccsFrom(n)
@@ -152,7 +153,7 @@ type TreeNode struct {
 
 type Tree map[NodeID]*TreeNode
 
-func (t Tree) Nodes() []NodeID {
+func (t Tree) nodes() []NodeID {
 	var res []NodeID
 	for id, _ := range t {
 		res = append(res, id)
@@ -160,52 +161,40 @@ func (t Tree) Nodes() []NodeID {
 	return SortNodeIDs(res)
 }
 
-type directedTree struct {
-	Tree
-}
-
 func (t Tree) Directed() Graph {
-	return directedTree{t}
-}
+	return Graph{Nodes: t.nodes(), Edges: func(id NodeID) []NodeID {
+		tn := t[id]
+		if tn == nil {
+			return nil
+		}
 
-func (t directedTree) Edges(id NodeID) []NodeID {
-	tn := t.Tree[id]
-	if tn == nil {
-		return nil
-	}
+		var res []NodeID
+		for _, child := range tn.children {
+			res = append(res, child.id)
+		}
 
-	var res []NodeID
-	for _, child := range tn.children {
-		res = append(res, child.id)
-	}
-
-	return res
-}
-
-type undirectedTree struct {
-	Tree
+		return res
+	}}
 }
 
 func (t Tree) Undirected() Graph {
-	return undirectedTree{t}
-}
+	return Graph{Nodes: t.nodes(), Edges: func(id NodeID) []NodeID {
+		tn := t[id]
+		if tn == nil {
+			return nil
+		}
 
-func (t undirectedTree) Edges(id NodeID) []NodeID {
-	tn := t.Tree[id]
-	if tn == nil {
-		return nil
-	}
+		var res []NodeID
+		if tn.parent != nil {
+			res = []NodeID{tn.parent.id}
+		}
 
-	var res []NodeID
-	if tn.parent != nil {
-		res = []NodeID{tn.parent.id}
-	}
+		for _, child := range tn.children {
+			res = append(res, child.id)
+		}
 
-	for _, child := range tn.children {
-		res = append(res, child.id)
-	}
-
-	return res
+		return res
+	}}
 }
 
 // Produce a spanning tree for the graph that attempts to:
@@ -332,20 +321,20 @@ func MakeBushySpanningTree(g Graph, root NodeID, softChildLimit int) Tree {
 	return res
 }
 
-type reachableGraph struct {
+type reachable struct {
 	nodes []NodeID
 	edges map[NodeID][]NodeID
 }
 
-func (g *reachableGraph) Nodes() []NodeID {
+func (g *reachable) Nodes() []NodeID {
 	return g.nodes
 }
 
-func (g *reachableGraph) Edges(n NodeID) []NodeID {
+func (g *reachable) Edges(n NodeID) []NodeID {
 	return g.edges[n]
 }
 
-func (g *reachableGraph) visit(n NodeID, edges func(NodeID) []NodeID) {
+func (g *reachable) visit(n NodeID, edges func(NodeID) []NodeID) {
 	if _, present := g.edges[n]; present {
 		return
 	}
@@ -359,7 +348,9 @@ func (g *reachableGraph) visit(n NodeID, edges func(NodeID) []NodeID) {
 }
 
 func ReachableGraph(start NodeID, edges func(NodeID) []NodeID) Graph {
-	res := &reachableGraph{edges: make(map[NodeID][]NodeID)}
+	res := reachable{edges: make(map[NodeID][]NodeID)}
 	res.visit(start, edges)
-	return res
+	return Graph{Nodes: res.nodes, Edges: func(id NodeID) []NodeID {
+		return res.edges[id]
+	}}
 }
