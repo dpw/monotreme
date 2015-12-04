@@ -35,7 +35,7 @@ func (s *sim) run(rng *rand.Rand) {
 
 		us := s.cs[l.from].UpdatesFor(s.cs[l.to].id)
 		if us != nil {
-			s.cs[l.to].Receive(us)
+			s.cs[l.to].Receive(s.cs[l.from].id, us)
 			s.cs[l.from].Delivered(s.cs[l.to].id, us)
 		}
 	}

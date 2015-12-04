@@ -67,11 +67,12 @@ func (c *Connectivity) propagate() {
 	}
 }
 
-func (c *Connectivity) Receive(updates []Update) {
+func (c *Connectivity) Receive(from NodeID, updates []Update) {
+	conn := c.conns[from]
 	news := false
 
 	for _, u := range updates {
-		if c.prop.Update(u) {
+		if conn.Update(u) {
 			news = true
 		}
 	}
