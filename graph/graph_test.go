@@ -12,109 +12,26 @@ import (
 	. "github.com/dpw/monotreme/rudiments"
 )
 
-func mapGraph(g map[NodeID][]NodeID) Graph {
-	var res []NodeID
-
-	for n := range g {
-		res = append(res, n)
+func graphsEqual(g, h Graph) bool {
+	if !reflect.DeepEqual(SortNodeIDs(g.Nodes), SortNodeIDs(h.Nodes)) {
+		return false
 	}
 
-	return Graph{Nodes: SortNodeIDs(res), Edges: func(id NodeID) []NodeID {
-		return g[id]
-	}}
-}
-
-func TestTranspose(t *testing.T) {
-	g := mapGraph(map[NodeID][]NodeID{"a": {"b"}, "b": {}})
-	tg := Transpose(g)
-	require.True(t, graphsEqual(tg,
-		mapGraph(map[NodeID][]NodeID{"a": {}, "b": {"a"}})))
-}
-
-type edge struct {
-	a, b NodeID
-}
-
-// An undirected graph represented as a set of edges.  The edge pairs
-// are sorted.
-type undirected map[edge]struct{}
-
-func makeEdge(a, b NodeID) edge {
-	if a > b {
-		t := a
-		a = b
-		b = t
-	}
-	return edge{a, b}
-}
-
-func (u undirected) add(a, b NodeID) {
-	u[makeEdge(a, b)] = struct{}{}
-}
-
-func (u undirected) remove(a, b NodeID) {
-	delete(u, makeEdge(a, b))
-}
-
-func (u undirected) toGraph() Graph {
-	g := make(map[NodeID][]NodeID)
-
-	// Symmetry
-	for e := range u {
-		g[e.a] = append(g[e.a], e.b)
-		g[e.b] = append(g[e.b], e.a)
-	}
-
-	// Reflexivity
-	for n := range g {
-		g[n] = append(g[n], n)
-	}
-
-	return mapGraph(g)
-}
-
-func generateSparse(r *rand.Rand, size int) undirected {
-	u := make(undirected)
-
-	nodes := []NodeID{NodeID("0")}
-
-	// Form a random tree
-	for i := 1; i < size; i++ {
-		n := NodeID(strconv.Itoa(i))
-		u.add(n, nodes[r.Intn(len(nodes))])
-		nodes = append(nodes, n)
-	}
-
-	// Add a few extra edges
-	for i := r.Intn(size); i > 0; i-- {
-		u.add(nodes[r.Intn(len(nodes))], nodes[r.Intn(len(nodes))])
-	}
-
-	return u
-}
-
-func generateDense(r *rand.Rand, size int) undirected {
-	u := make(undirected)
-	nodes := make([]NodeID, size)
-
-	for i := 0; i < size; i++ {
-		nodes[i] = NodeID(strconv.Itoa(i))
-	}
-
-	// Form a fully-connected graph
-	for i := 0; i < size; i++ {
-		for j := 0; j < i; j++ {
-			u.add(nodes[i], nodes[j])
+	for _, n := range g.Nodes {
+		if !reflect.DeepEqual(SortNodeIDs(g.Edges(n)),
+			SortNodeIDs(h.Edges(n))) {
+			return false
 		}
 	}
 
-	// Remove some edges
-	for i := r.Intn(size); i > 0; i-- {
-		a := r.Intn(len(nodes)-1) + 1
-		u.remove(nodes[r.Intn(len(nodes))], nodes[r.Intn(a)])
-	}
+	return true
+}
 
-	return u
+func TestTranspose(t *testing.T) {
+	g := MapGraph(map[NodeID][]NodeID{"a": {"b"}, "b": {}})
+	tg := Transpose(g)
+	require.True(t, graphsEqual(tg,
+		MapGraph(map[NodeID][]NodeID{"a": {}, "b": {"a"}})))
 }
 
 func checkShortestPaths(t *testing.T, g Graph, sps map[NodeID]ShortestPath) {
@@ -212,8 +129,8 @@ func TestFindShortestPaths(t *testing.T) {
 	}
 
 	for i := 0; i < 100; i++ {
-		check(generateSparse(r, 10).toGraph())
-		check(generateDense(r, 10).toGraph())
+		check(GenerateSparse(r, 10).Graph())
+		check(GenerateDense(r, 10).Graph())
 	}
 }
 
@@ -267,8 +184,8 @@ func TestFindPseudoCentralNode(t *testing.T) {
 	}
 
 	for i := 0; i < 100; i++ {
-		check(generateSparse(r, 10).toGraph())
-		check(generateDense(r, 10).toGraph())
+		check(GenerateSparse(r, 10).Graph())
+		check(GenerateDense(r, 10).Graph())
 	}
 }
 
@@ -283,7 +200,7 @@ func linearGraph(n int) Graph {
 		prev = next
 	}
 
-	return mapGraph(g)
+	return MapGraph(g)
 }
 
 func TestFindPseudoCentralNodeOfLinearGraph(t *testing.T) {
@@ -291,21 +208,6 @@ func TestFindPseudoCentralNodeOfLinearGraph(t *testing.T) {
 		10))
 	require.Equal(t, NodeID("50"), FindPseudoCentralNode(linearGraph(101),
 		11))
-}
-
-func graphsEqual(g, h Graph) bool {
-	if !reflect.DeepEqual(SortNodeIDs(g.Nodes), SortNodeIDs(h.Nodes)) {
-		return false
-	}
-
-	for _, n := range g.Nodes {
-		if !reflect.DeepEqual(SortNodeIDs(g.Edges(n)),
-			SortNodeIDs(h.Edges(n))) {
-			return false
-		}
-	}
-
-	return true
 }
 
 // Validate a tree
@@ -347,11 +249,11 @@ func TestMakeBushySpanningTree(t *testing.T) {
 	}
 
 	for i := 0; i < 100; i++ {
-		check(generateSparse(r, 10).toGraph(), 4, 2)
-		check(generateDense(r, 10).toGraph(), 4, 2)
+		check(GenerateSparse(r, 10).Graph(), 4, 2)
+		check(GenerateDense(r, 10).Graph(), 4, 2)
 	}
 
 	// Test on some nice big graphs, for luck
-	check(generateSparse(r, 100).toGraph(), 10, 3)
-	check(generateDense(r, 100).toGraph(), 10, 3)
+	check(GenerateSparse(r, 100).Graph(), 10, 3)
+	check(GenerateDense(r, 100).Graph(), 10, 3)
 }

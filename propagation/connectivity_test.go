@@ -1,13 +1,13 @@
 package propagation
 
 import (
-	"fmt"
 	"math/rand"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/dpw/monotreme/graph"
 	. "github.com/dpw/monotreme/rudiments"
 )
 
@@ -16,7 +16,7 @@ type link struct {
 }
 
 type sim struct {
-	cs      []*Connectivity
+	cs      map[NodeID]*Connectivity
 	pending []*link
 }
 
@@ -26,6 +26,20 @@ func (s *sim) connect(a, b *Connectivity) {
 	ba.from = b.Connect(a.id, func() { s.pending = append(s.pending, &ba) })
 	ab.to = ba.from
 	ba.to = ab.from
+}
+
+func makeSim(u graph.Undirected) *sim {
+	sim := &sim{cs: make(map[NodeID]*Connectivity)}
+
+	for _, n := range u.Graph().Nodes {
+		sim.cs[n] = NewConnectivity(n)
+	}
+
+	for e := range u {
+		sim.connect(sim.cs[e.A], sim.cs[e.B])
+	}
+
+	return sim
 }
 
 func (s *sim) run(rng *rand.Rand) {
@@ -43,19 +57,17 @@ func (s *sim) run(rng *rand.Rand) {
 	}
 }
 
-func fullyConnected() *sim {
-	sim := &sim{}
+func (s *sim) test(t *testing.T, rng *rand.Rand) {
+	s.run(rng)
 
-	for i := 0; i < 10; i++ {
-		n := len(sim.cs)
-		sim.cs = append(sim.cs, NewConnectivity(NodeID(fmt.Sprint(n))))
-
-		for i := 0; i < n; i++ {
-			sim.connect(sim.cs[i], sim.cs[n])
+	var expect map[NodeID][]NodeID
+	for _, c := range s.cs {
+		if expect == nil {
+			expect = c.dump()
+		} else {
+			require.Equal(t, expect, c.dump())
 		}
 	}
-
-	return sim
 }
 
 // Dump the contents of a Connectivity to simple representation
@@ -70,13 +82,8 @@ func (c *Connectivity) dump() map[NodeID][]NodeID {
 func TestConnectivity(t *testing.T) {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 
-	for i := 0; i < 10; i++ {
-		sim := fullyConnected()
-		sim.run(rng)
-
-		expect := sim.cs[0].dump()
-		for _, c := range sim.cs[1:] {
-			require.Equal(t, expect, c.dump())
-		}
+	for i := 0; i < 5; i++ {
+		makeSim(graph.GenerateDense(rng, 10)).test(t, rng)
+		makeSim(graph.GenerateSparse(rng, 10)).test(t, rng)
 	}
 }
