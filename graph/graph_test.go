@@ -13,13 +13,12 @@ import (
 )
 
 func graphsEqual(g, h Graph) bool {
-	if !reflect.DeepEqual(SortNodeIDs(g.Nodes), SortNodeIDs(h.Nodes)) {
+	if !NodeIDsEqual(g.Nodes, h.Nodes) {
 		return false
 	}
 
 	for _, n := range g.Nodes {
-		if !reflect.DeepEqual(SortNodeIDs(g.Edges(n)),
-			SortNodeIDs(h.Edges(n))) {
+		if !NodeIDsEqual(g.Edges(n), h.Edges(n)) {
 			return false
 		}
 	}
@@ -29,8 +28,7 @@ func graphsEqual(g, h Graph) bool {
 
 func TestTranspose(t *testing.T) {
 	g := MapGraph(map[NodeID][]NodeID{"a": {"b"}, "b": {}})
-	tg := Transpose(g)
-	require.True(t, graphsEqual(tg,
+	require.True(t, graphsEqual(g.Transpose(),
 		MapGraph(map[NodeID][]NodeID{"a": {}, "b": {"a"}})))
 }
 
@@ -49,7 +47,7 @@ func checkShortestPaths(t *testing.T, g Graph, sps map[NodeID]ShortestPath) {
 	for _, n := range g.Nodes {
 		nsp, present := sps[n]
 		if !present {
-			/// n was not reachable
+			// n was not reachable
 			continue
 		}
 

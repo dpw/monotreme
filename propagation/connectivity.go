@@ -6,7 +6,8 @@ import (
 )
 
 type Connection struct {
-	c *Connectivity
+	c    *Connectivity
+	node NodeID
 	*Neighbor
 	buddy   bool
 	pending func()
@@ -28,37 +29,82 @@ func NewConnectivity(id NodeID) *Connectivity {
 	}
 }
 
-func (c *Connectivity) Connect(node NodeID, pending func()) *Connection {
+func (c *Connectivity) Connect(node NodeID) *Connection {
 	if _, present := c.conns[node]; present {
 		panic("already connected")
 	}
 
 	conn := &Connection{
 		c:        c,
+		node:     node,
 		Neighbor: c.prop.AddNeighbor(),
-		pending:  pending,
 	}
 	c.conns[node] = conn
 
+	c.connectionsChanged()
+	return conn
+}
+
+func (conn *Connection) Close() {
+	conn.Neighbor.Remove()
+	delete(conn.c.conns, conn.node)
+	conn.c.connectionsChanged()
+}
+
+func (c *Connectivity) connectionsChanged() {
+	c.version++
+	c.prop.Update(Update{Node: c.id, Version: c.version,
+		State: graph.SortNodeIDs(c.connNodeIDs())})
+	c.propagate()
+}
+
+func (c *Connectivity) connNodeIDs() []NodeID {
 	var conns []NodeID
 	for n := range c.conns {
 		conns = append(conns, n)
 	}
-	conns = graph.SortNodeIDs(conns)
-
-	c.version++
-	c.prop.Update(Update{Node: c.id, Version: c.version, State: conns})
-	c.propagate()
-
-	return conn
+	return conns
 }
 
 func (c *Connectivity) propagate() {
 	// reachability prune
-	g := graph.ReachableGraph(c.id,
-		func(node NodeID) []NodeID {
-			return (c.prop.Get(node, []NodeID(nil))).([]NodeID)
-		})
+	g := graph.ReachableGraph(c.id, func(node NodeID) []NodeID {
+		return c.prop.Get(node, []NodeID(nil)).([]NodeID)
+	})
+
+	// The graph g might not be symmetric, as we might hear that
+	// one side of a connection was dropped or established
+	// before/without hearing about the other side.
+	//
+	// We can't simply make it symmetric by adding edges to make
+	// an undirected graph, because that might result in an edge in
+	// the spanning tree that doesn't correspond to a working
+	// connection.
+	//
+	// Alteratively, we can make an undirected graph by removing
+	// edges that don't have a counterpet reverse edge.  This is
+	// better, but introduces a bootstrapping problem: When we add
+	// a connection to another node, we don't know that it is
+	// connected to us, and so the edge won't feature in the
+	// graph.  But that means we can never learn anything from
+	// other nodes.
+	//
+	// So we use the intersected graph, but add to it the local
+	// graph whcih reflects connections to neighbouring nodes.
+	local := graph.Graph{
+		Nodes: graph.SortNodeIDs(append(c.connNodeIDs(), c.id)),
+		Edges: func(node NodeID) []NodeID {
+			if node == c.id {
+				return c.connNodeIDs()
+			} else {
+				return nil
+			}
+		},
+	}
+
+	local = local.Union(local.Transpose())
+
+	g = g.Intersect(g.Transpose()).Union(local)
 
 	// XXX Prune the propagation according to g
 
@@ -72,10 +118,22 @@ func (c *Connectivity) propagate() {
 
 	for _, b := range t.Undirected().Edges(c.id) {
 		conn := c.conns[b]
+		if conn == nil {
+			// XXX comment
+			continue
+		}
+
 		conn.buddy = true
-		if conn.HasUpdates() {
+		if conn.HasUpdates() && conn.pending != nil {
 			conn.pending()
 		}
+	}
+}
+
+func (conn *Connection) SetPendingFunc(pending func()) {
+	conn.pending = pending
+	if conn.HasUpdates() && pending != nil {
+		pending()
 	}
 }
 
@@ -100,12 +158,3 @@ func (conn *Connection) Updates() []Update {
 
 	return conn.Neighbor.Updates()
 }
-
-// Operations:
-
-// remove conn
-
-// Delivered
-// - pass through to propagation
-
-// Scheduler callback: pending updates on a connection

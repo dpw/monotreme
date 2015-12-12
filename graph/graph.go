@@ -6,6 +6,35 @@ import (
 	. "github.com/dpw/monotreme/rudiments"
 )
 
+func NodeIDsEqual(a, b []NodeID) bool {
+	s := make(map[NodeID]struct{})
+
+	for _, n := range a {
+		s[n] = struct{}{}
+	}
+
+	for _, n := range b {
+		delete(s, n)
+	}
+
+	return len(s) == 0
+}
+
+func SortNodeIDs(ids []NodeID) []NodeID {
+	strs := make([]string, len(ids))
+	for i := range ids {
+		strs[i] = string(ids[i])
+	}
+
+	sort.StringSlice(strs).Sort()
+	ids = make([]NodeID, len(ids))
+	for i := range ids {
+		ids[i] = NodeID(strs[i])
+	}
+
+	return ids
+}
+
 // // A graph is a set of nodes, and a function that produces the
 // outgoing edges from a node.  A Graph is /stable/ if the NodeID
 // arrays returned by the Edge function always appear in the same
@@ -20,7 +49,18 @@ type Graph struct {
 	Edges func(NodeID) []NodeID
 }
 
-func Transpose(g Graph) Graph {
+// Convert the graph to simple map represenation.  Useful for debugging.
+func (g Graph) Map() map[NodeID][]NodeID {
+	res := make(map[NodeID][]NodeID)
+
+	for _, n := range g.Nodes {
+		res[n] = g.Edges(n)
+	}
+
+	return res
+}
+
+func (g Graph) Transpose() Graph {
 	tg := make(map[NodeID][]NodeID)
 
 	for _, n := range g.Nodes {
@@ -32,6 +72,63 @@ func Transpose(g Graph) Graph {
 	return Graph{Nodes: g.Nodes, Edges: func(n NodeID) []NodeID {
 		return tg[n]
 	}}
+}
+
+func (g Graph) Intersect(h Graph) Graph {
+	return Graph{
+		Nodes: intersectNodeIDs(g.Nodes, h.Nodes),
+		Edges: func(n NodeID) []NodeID {
+			return intersectNodeIDs(g.Edges(n), h.Edges(n))
+		},
+	}
+}
+
+func intersectNodeIDs(a, b []NodeID) []NodeID {
+	s := make(map[NodeID]struct{})
+
+	for _, n := range b {
+		s[n] = struct{}{}
+	}
+
+	var res []NodeID
+
+	// Use the ordering from a in the result
+	for _, n := range a {
+		if _, present := s[n]; present {
+			res = append(res, n)
+		}
+	}
+
+	return res
+}
+
+func (g Graph) Union(h Graph) Graph {
+	return Graph{
+		Nodes: unionNodeIDs(g.Nodes, h.Nodes),
+		Edges: func(n NodeID) []NodeID {
+			return unionNodeIDs(g.Edges(n), h.Edges(n))
+		},
+	}
+}
+
+func unionNodeIDs(a, b []NodeID) []NodeID {
+	s := make(map[NodeID]struct{})
+
+	for _, n := range a {
+		s[n] = struct{}{}
+	}
+
+	for _, n := range b {
+		s[n] = struct{}{}
+	}
+
+	var res []NodeID
+
+	for n := range s {
+		res = append(res, n)
+	}
+
+	return SortNodeIDs(res)
 }
 
 // The shortest path result for a particular node
@@ -92,21 +189,6 @@ func FindShortestPaths(g Graph, start NodeID) map[NodeID]ShortestPath {
 
 const MaxInt int = int(^uint(0) >> 1)
 
-func SortNodeIDs(ids []NodeID) []NodeID {
-	strs := make([]string, len(ids))
-	for i := range ids {
-		strs[i] = string(ids[i])
-	}
-
-	sort.StringSlice(strs).Sort()
-	ids = make([]NodeID, len(ids))
-	for i := range ids {
-		ids[i] = NodeID(strs[i])
-	}
-
-	return ids
-}
-
 // Find a pseudo-centrol node: The node with lowest eccentricity with
 // respect to a set of witness nodes.
 func FindPseudoCentralNode(g Graph, witnesses int) NodeID {
@@ -116,7 +198,7 @@ func FindPseudoCentralNode(g Graph, witnesses int) NodeID {
 
 	// Transpose the graph in order to find shortest paths from
 	// candidate pseudo-central nodes to the witnesses:
-	tg := Transpose(g)
+	tg := g.Transpose()
 	fillEccsFrom := func(n NodeID) {
 		for m, sp := range FindShortestPaths(tg, n) {
 			if sp.Distance > eccs[m] {
@@ -369,4 +451,10 @@ func ReachableGraph(start NodeID, edges func(NodeID) []NodeID) Graph {
 	return Graph{Nodes: res.nodes, Edges: func(id NodeID) []NodeID {
 		return res.edges[id]
 	}}
+}
+
+func (g Graph) Connected() bool {
+	r := reachable{edges: make(map[NodeID][]NodeID)}
+	r.visit(g.Nodes[0], g.Edges)
+	return NodeIDsEqual(g.Nodes, r.nodes)
 }
