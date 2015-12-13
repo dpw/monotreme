@@ -82,15 +82,16 @@ func (c *Connectivity) propagate() {
 	// connection.
 	//
 	// Alteratively, we can make an undirected graph by removing
-	// edges that don't have a counterpet reverse edge.  This is
+	// edges that don't have a counterpart reverse edge.  This is
 	// better, but introduces a bootstrapping problem: When we add
 	// a connection to another node, we don't know that it is
 	// connected to us, and so the edge won't feature in the
-	// graph.  But that means we can never learn anything from
-	// other nodes.
+	// graph.  Which would mean that we can never learn anything
+	// from other nodes.
 	//
-	// So we use the intersected graph, but add to it the local
-	// graph whcih reflects connections to neighbouring nodes.
+	// So we use the intersected graph, but enhance it with the
+	// local graph whcih reflects connections from this node to
+	// neighbouring nodes.
 	local := graph.Graph{
 		Nodes: graph.SortNodeIDs(append(c.connNodeIDs(), c.id)),
 		Edges: func(node NodeID) []NodeID {
@@ -146,10 +147,19 @@ func (conn *Connection) Receive(updates []Update) {
 	}
 }
 
-func (conn *Connection) Updates() []Update {
+func (conn *Connection) UpdatesToSend() []Update {
 	if !conn.buddy {
 		return nil
 	}
 
-	return conn.Neighbor.Updates()
+	return conn.Neighbor.UpdatesToSend()
+}
+
+// Dump the contents of a Connectivity to simple representation
+func (c *Connectivity) Dump() map[NodeID]Update {
+	res := make(map[NodeID]Update)
+	for n, state := range c.prop.nodes {
+		res[n] = state.Update
+	}
+	return res
 }

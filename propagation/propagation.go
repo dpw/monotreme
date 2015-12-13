@@ -95,7 +95,7 @@ func (n *Neighbor) Update(u Update) bool {
 }
 
 // Get the updates pending for the neighbor
-func (n *Neighbor) Updates() []Update {
+func (n *Neighbor) UpdatesToSend() []Update {
 	var res []Update
 
 	for _, ns := range n.nodes {
@@ -107,7 +107,7 @@ func (n *Neighbor) Updates() []Update {
 	return res
 }
 
-// Are there pending updates for the neighbor
+// Are there pending updates for the neighbor?
 func (n *Neighbor) HasUpdates() bool {
 	for _, ns := range n.nodes {
 		if !ns.delivered.Test(n.index) {

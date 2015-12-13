@@ -71,15 +71,6 @@ func makeSim(g graph.Undirected) *sim {
 	return sim
 }
 
-// Dump the contents of a Connectivity to simple representation
-func (c *Connectivity) dump() map[NodeID][]NodeID {
-	res := make(map[NodeID][]NodeID)
-	for n, state := range c.prop.nodes {
-		res[n] = state.State.([]NodeID)
-	}
-	return res
-}
-
 func dbg(msg ...interface{}) {
 	//fmt.Println(msg...)
 }
@@ -125,7 +116,7 @@ func (s *sim) run(t *testing.T, rng *rand.Rand) {
 			continue
 		}
 
-		us := l.sender.Updates()
+		us := l.sender.UpdatesToSend()
 		if us != nil {
 			dbg(l.sender.c.id, "->", l.receiver.c.id, ":", us)
 			l.receiver.Receive(us)
