@@ -118,11 +118,6 @@ func (c *Connectivity) propagate() {
 
 	for _, b := range t.Undirected().Edges(c.id) {
 		conn := c.conns[b]
-		if conn == nil {
-			// XXX comment
-			continue
-		}
-
 		conn.buddy = true
 		if conn.HasUpdates() && conn.pending != nil {
 			conn.pending()
