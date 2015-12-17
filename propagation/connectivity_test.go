@@ -124,15 +124,15 @@ func (s *sim) run(t *testing.T, rng *rand.Rand) {
 		}
 	}
 
-	var expect map[NodeID][]NodeID
+	var expect map[NodeID]interface{}
 	var expectNode NodeID
 	for _, node := range s.graph.Nodes {
 		c := s.cs[node]
 		if expect == nil {
-			expect = c.dump()
+			expect = c.Dump()
 			expectNode = node
 		} else {
-			require.Equal(t, expect, c.dump(), "mismatch %s %s", expectNode, node)
+			require.Equal(t, expect, c.Dump(), "mismatch %s %s", expectNode, node)
 		}
 	}
 }

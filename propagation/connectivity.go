@@ -156,10 +156,10 @@ func (conn *Connection) UpdatesToSend() []Update {
 }
 
 // Dump the contents of a Connectivity to simple representation
-func (c *Connectivity) Dump() map[NodeID]Update {
-	res := make(map[NodeID]Update)
+func (c *Connectivity) Dump() map[NodeID]interface{} {
+	res := make(map[NodeID]interface{})
 	for n, state := range c.prop.nodes {
-		res[n] = state.Update
+		res[n] = state.Update.State
 	}
 	return res
 }
