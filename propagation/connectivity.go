@@ -9,8 +9,8 @@ type Link struct {
 	c    *Connectivity
 	node NodeID
 	*Neighbor
-	buddy   bool
-	pending func()
+	treeLink bool
+	pending  func()
 }
 
 type Connectivity struct {
@@ -109,17 +109,17 @@ func (c *Connectivity) propagate() {
 
 	// XXX Prune the propagation according to g
 
-	// recompute spanning tree to find buddies
+	// recompute spanning tree
 	pcn := graph.FindPseudoCentralNode(g, 10)
 	t := graph.MakeBushySpanningTree(g, pcn, 4)
 
 	for _, link := range c.links {
-		link.buddy = false
+		link.treeLink = false
 	}
 
 	for _, b := range t.Undirected().Edges(c.id) {
 		link := c.links[b]
-		link.buddy = true
+		link.treeLink = true
 		if link.HasOutgoing() && link.pending != nil {
 			link.pending()
 		}
@@ -148,7 +148,7 @@ func (link *Link) Receive(updates []Update) {
 }
 
 func (link *Link) Outgoing() []Update {
-	if !link.buddy {
+	if !link.treeLink {
 		return nil
 	}
 
