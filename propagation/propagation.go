@@ -29,10 +29,14 @@ type Neighbor struct {
 type Propagation struct {
 	neighbors []*Neighbor
 	nodes     map[NodeID]*nodeState
+	onChange  func()
 }
 
-func NewPropagation() *Propagation {
-	return &Propagation{nodes: make(map[NodeID]*nodeState)}
+func newPropagation(onChange func()) *Propagation {
+	return &Propagation{
+		nodes:    make(map[NodeID]*nodeState),
+		onChange: onChange,
+	}
 }
 
 func (p *Propagation) Get(node NodeID, def interface{}) interface{} {
@@ -78,20 +82,30 @@ func (p *Propagation) update(u Update) *nodeState {
 }
 
 // Register an update.  Returns true if this update is news.
-func (p *Propagation) Set(u Update) bool {
-	return p.update(u) != nil
+func (p *Propagation) Set(u Update) {
+	if p.update(u) != nil {
+		p.onChange()
+	}
 }
 
 // Register an update received from the neighbor.  Returns true if
 // this update is news.
-func (n *Neighbor) Incoming(u Update) bool {
-	ns := n.update(u)
-	if ns == nil {
-		return false
+func (n *Neighbor) Incoming(updates []Update) {
+	news := false
+
+	for _, u := range updates {
+		ns := n.update(u)
+		if ns == nil {
+			continue
+		}
+
+		ns.delivered.Set(n.index)
+		news = true
 	}
 
-	ns.delivered.Set(n.index)
-	return true
+	if news {
+		n.onChange()
+	}
 }
 
 // Get the updates pending for the neighbor

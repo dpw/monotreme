@@ -22,11 +22,12 @@ type Connectivity struct {
 }
 
 func NewConnectivity(id NodeID) *Connectivity {
-	return &Connectivity{
+	c := &Connectivity{
 		id:    id,
-		prop:  NewPropagation(),
 		links: make(map[NodeID]*Link),
 	}
+	c.prop = newPropagation(c.connectivityChange)
+	return c
 }
 
 func (c *Connectivity) Link(node NodeID) *Link {
@@ -55,7 +56,6 @@ func (c *Connectivity) linksChanged() {
 	c.version++
 	c.prop.Set(Update{Node: c.id, Version: c.version,
 		State: graph.SortNodeIDs(c.linkNodeIDs())})
-	c.propagate()
 }
 
 func (c *Connectivity) linkNodeIDs() []NodeID {
@@ -66,7 +66,7 @@ func (c *Connectivity) linkNodeIDs() []NodeID {
 	return links
 }
 
-func (c *Connectivity) propagate() {
+func (c *Connectivity) connectivityChange() {
 	// reachability prune
 	g := graph.ReachableGraph(c.id, func(node NodeID) []NodeID {
 		return c.prop.Get(node, []NodeID(nil)).([]NodeID)
@@ -130,20 +130,6 @@ func (link *Link) SetPendingFunc(pending func()) {
 	link.pending = pending
 	if link.HasOutgoing() && pending != nil {
 		pending()
-	}
-}
-
-func (link *Link) Receive(updates []Update) {
-	news := false
-
-	for _, u := range updates {
-		if link.Incoming(u) {
-			news = true
-		}
-	}
-
-	if news {
-		link.c.propagate()
 	}
 }
 

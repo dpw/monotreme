@@ -166,7 +166,7 @@ func (c *connection) readSide() error {
 		func() {
 			c.nd.lock.Lock()
 			defer c.nd.lock.Unlock()
-			c.link.Receive(updates)
+			c.link.Incoming(updates)
 			log.Println(c.nd.connectivity.Dump())
 		}()
 	}
