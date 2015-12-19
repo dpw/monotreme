@@ -14,9 +14,7 @@ type Link struct {
 }
 
 type Connectivity struct {
-	id      NodeID
-	version Version
-
+	id    NodeID
 	prop  *Propagation
 	links map[NodeID]*Link
 }
@@ -53,9 +51,7 @@ func (link *Link) Close() {
 }
 
 func (c *Connectivity) linksChanged() {
-	c.version++
-	c.prop.Set(Update{Node: c.id, Version: c.version,
-		State: graph.SortNodeIDs(c.linkNodeIDs())})
+	c.prop.Set(c.id, graph.SortNodeIDs(c.linkNodeIDs()))
 }
 
 func (c *Connectivity) linkNodeIDs() []NodeID {
@@ -128,7 +124,7 @@ func (c *Connectivity) connectivityChange() {
 
 func (link *Link) SetPendingFunc(pending func()) {
 	link.pending = pending
-	if link.HasOutgoing() && pending != nil {
+	if pending != nil && link.treeLink && link.HasOutgoing() {
 		pending()
 	}
 }

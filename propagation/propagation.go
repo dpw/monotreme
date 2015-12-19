@@ -66,26 +66,18 @@ func (n *Neighbor) Remove() {
 	n2.index = n.index
 }
 
-func (p *Propagation) update(u Update) *nodeState {
-	ns := p.nodes[u.Node]
+// Register an update.  Returns true if this update is news.
+func (p *Propagation) Set(n NodeID, state interface{}) {
+	ns := p.nodes[n]
 	if ns == nil {
-		ns = &nodeState{Update: u}
-		p.nodes[u.Node] = ns
-	} else if ns.Version >= u.Version {
-		return nil
+		p.nodes[n] = &nodeState{Update: Update{n, 0, state}}
 	} else {
-		ns.Update = u
+		ns.Version++
+		ns.State = state
 		ns.delivered.ClearAll()
 	}
 
-	return ns
-}
-
-// Register an update.  Returns true if this update is news.
-func (p *Propagation) Set(u Update) {
-	if p.update(u) != nil {
-		p.onChange()
-	}
+	p.onChange()
 }
 
 // Register an update received from the neighbor.  Returns true if
@@ -94,9 +86,15 @@ func (n *Neighbor) Incoming(updates []Update) {
 	news := false
 
 	for _, u := range updates {
-		ns := n.update(u)
+		ns := n.nodes[u.Node]
 		if ns == nil {
+			ns = &nodeState{Update: u}
+			n.nodes[u.Node] = ns
+		} else if ns.Version >= u.Version {
 			continue
+		} else {
+			ns.Update = u
+			ns.delivered.ClearAll()
 		}
 
 		ns.delivered.Set(n.index)
