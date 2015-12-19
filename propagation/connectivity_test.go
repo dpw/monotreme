@@ -13,7 +13,7 @@ import (
 )
 
 type link struct {
-	sender, receiver *Connection
+	sender, receiver *Link
 	closed           bool
 }
 
@@ -24,12 +24,12 @@ type sim struct {
 	pending []*link
 }
 
-func (s *sim) connect(e graph.Edge) {
+func (s *sim) link(e graph.Edge) {
 	a := s.cs[e.A]
 	b := s.cs[e.B]
 
-	aconn := a.Connect(b.id)
-	bconn := b.Connect(a.id)
+	aconn := a.Link(b.id)
+	bconn := b.Link(a.id)
 
 	alink := &link{aconn, bconn, false}
 	blink := &link{bconn, aconn, false}
@@ -65,7 +65,7 @@ func makeSim(g graph.Undirected) *sim {
 	}
 
 	for _, e := range g.SortedEdges() {
-		sim.connect(e)
+		sim.link(e)
 	}
 
 	return sim
@@ -85,7 +85,7 @@ func (s *sim) run(t *testing.T, rng *rand.Rand) {
 		}
 		step++
 
-		// Maybe add or remove a connection
+		// Maybe add or remove a link
 		if rng.Intn(100) == 0 {
 			e := s.graph.RandomEdge(rng)
 			if s.graph.Contains(e) {
@@ -102,7 +102,7 @@ func (s *sim) run(t *testing.T, rng *rand.Rand) {
 			} else {
 				dbg("Connecting", e)
 				s.graph.Add(e)
-				s.connect(e)
+				s.link(e)
 			}
 		}
 

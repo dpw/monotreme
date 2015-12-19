@@ -5,7 +5,7 @@ import (
 	. "github.com/dpw/monotreme/rudiments"
 )
 
-type Connection struct {
+type Link struct {
 	c    *Connectivity
 	node NodeID
 	*Neighbor
@@ -18,52 +18,52 @@ type Connectivity struct {
 	version Version
 
 	prop  *Propagation
-	conns map[NodeID]*Connection
+	links map[NodeID]*Link
 }
 
 func NewConnectivity(id NodeID) *Connectivity {
 	return &Connectivity{
 		id:    id,
 		prop:  NewPropagation(),
-		conns: make(map[NodeID]*Connection),
+		links: make(map[NodeID]*Link),
 	}
 }
 
-func (c *Connectivity) Connect(node NodeID) *Connection {
-	if _, present := c.conns[node]; present {
-		panic("already connected")
+func (c *Connectivity) Link(node NodeID) *Link {
+	if _, present := c.links[node]; present {
+		panic("already linked")
 	}
 
-	conn := &Connection{
+	link := &Link{
 		c:        c,
 		node:     node,
 		Neighbor: c.prop.AddNeighbor(),
 	}
-	c.conns[node] = conn
+	c.links[node] = link
 
-	c.connectionsChanged()
-	return conn
+	c.linksChanged()
+	return link
 }
 
-func (conn *Connection) Close() {
-	conn.Neighbor.Remove()
-	delete(conn.c.conns, conn.node)
-	conn.c.connectionsChanged()
+func (link *Link) Close() {
+	link.Neighbor.Remove()
+	delete(link.c.links, link.node)
+	link.c.linksChanged()
 }
 
-func (c *Connectivity) connectionsChanged() {
+func (c *Connectivity) linksChanged() {
 	c.version++
 	c.prop.Set(Update{Node: c.id, Version: c.version,
-		State: graph.SortNodeIDs(c.connNodeIDs())})
+		State: graph.SortNodeIDs(c.linkNodeIDs())})
 	c.propagate()
 }
 
-func (c *Connectivity) connNodeIDs() []NodeID {
-	var conns []NodeID
-	for n := range c.conns {
-		conns = append(conns, n)
+func (c *Connectivity) linkNodeIDs() []NodeID {
+	var links []NodeID
+	for n := range c.links {
+		links = append(links, n)
 	}
-	return conns
+	return links
 }
 
 func (c *Connectivity) propagate() {
@@ -73,30 +73,30 @@ func (c *Connectivity) propagate() {
 	})
 
 	// The graph g might not be symmetric, as we might hear that
-	// one side of a connection was dropped or established
+	// one side of a link was dropped or established
 	// before/without hearing about the other side.
 	//
 	// We can't simply make it symmetric by adding edges to make
 	// an undirected graph, because that might result in an edge in
 	// the spanning tree that doesn't correspond to a working
-	// connection.
+	// link.
 	//
 	// Alteratively, we can make an undirected graph by removing
 	// edges that don't have a counterpart reverse edge.  This is
 	// better, but introduces a bootstrapping problem: When we add
-	// a connection to another node, we don't know that it is
-	// connected to us, and so the edge won't feature in the
-	// graph.  Which would mean that we can never learn anything
-	// from other nodes.
+	// a link to another node, we don't know that it is linked to
+	// us, and so the edge won't feature in the graph.  Which
+	// would mean that we can never learn anything from other
+	// nodes.
 	//
 	// So we use the intersected graph, but enhance it with the
-	// local graph whcih reflects connections from this node to
+	// local graph whcih reflects links from this node to
 	// neighbouring nodes.
 	local := graph.Graph{
-		Nodes: graph.SortNodeIDs(append(c.connNodeIDs(), c.id)),
+		Nodes: graph.SortNodeIDs(append(c.linkNodeIDs(), c.id)),
 		Edges: func(node NodeID) []NodeID {
 			if node == c.id {
-				return c.connNodeIDs()
+				return c.linkNodeIDs()
 			} else {
 				return nil
 			}
@@ -113,49 +113,49 @@ func (c *Connectivity) propagate() {
 	pcn := graph.FindPseudoCentralNode(g, 10)
 	t := graph.MakeBushySpanningTree(g, pcn, 4)
 
-	for _, conn := range c.conns {
-		conn.buddy = false
+	for _, link := range c.links {
+		link.buddy = false
 	}
 
 	for _, b := range t.Undirected().Edges(c.id) {
-		conn := c.conns[b]
-		conn.buddy = true
-		if conn.HasOutgoing() && conn.pending != nil {
-			conn.pending()
+		link := c.links[b]
+		link.buddy = true
+		if link.HasOutgoing() && link.pending != nil {
+			link.pending()
 		}
 	}
 }
 
-func (conn *Connection) SetPendingFunc(pending func()) {
-	conn.pending = pending
-	if conn.HasOutgoing() && pending != nil {
+func (link *Link) SetPendingFunc(pending func()) {
+	link.pending = pending
+	if link.HasOutgoing() && pending != nil {
 		pending()
 	}
 }
 
-func (conn *Connection) Receive(updates []Update) {
+func (link *Link) Receive(updates []Update) {
 	news := false
 
 	for _, u := range updates {
-		if conn.Incoming(u) {
+		if link.Incoming(u) {
 			news = true
 		}
 	}
 
 	if news {
-		conn.c.propagate()
+		link.c.propagate()
 	}
 }
 
-func (conn *Connection) Outgoing() []Update {
-	if !conn.buddy {
+func (link *Link) Outgoing() []Update {
+	if !link.buddy {
 		return nil
 	}
 
-	return conn.Neighbor.Outgoing()
+	return link.Neighbor.Outgoing()
 }
 
-// Dump the contents of a Connectivity to simple representation
+// Dump the contents of a Linkectivity to simple representation
 func (c *Connectivity) Dump() map[NodeID]interface{} {
 	res := make(map[NodeID]interface{})
 	for n, state := range c.prop.nodes {

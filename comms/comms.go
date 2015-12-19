@@ -70,7 +70,7 @@ type connection struct {
 	toSend chan struct{}
 
 	// protected by the NodeDaemon lock
-	connection *propagation.Connection
+	link *propagation.Link
 }
 
 func (nd *NodeDaemon) handleConnection(conn net.Conn) {
@@ -116,7 +116,7 @@ func (c *connection) writeSide() error {
 }
 
 func (c *connection) writePending(w *writer) error {
-	updates := c.connection.Outgoing()
+	updates := c.link.Outgoing()
 	if updates != nil {
 		func() {
 			c.nd.lock.Lock()
@@ -131,7 +131,7 @@ func (c *connection) writePending(w *writer) error {
 		func() {
 			c.nd.lock.Lock()
 			defer c.nd.lock.Unlock()
-			c.connection.Delivered(updates)
+			c.link.Delivered(updates)
 		}()
 	}
 
@@ -149,8 +149,8 @@ func (c *connection) readSide() error {
 	func() {
 		c.nd.lock.Lock()
 		defer c.nd.lock.Unlock()
-		c.connection = c.nd.connectivity.Connect(them)
-		c.connection.SetPendingFunc(func() {
+		c.link = c.nd.connectivity.Link(them)
+		c.link.SetPendingFunc(func() {
 			select {
 			case c.toSend <- struct{}{}:
 			}
@@ -166,7 +166,7 @@ func (c *connection) readSide() error {
 		func() {
 			c.nd.lock.Lock()
 			defer c.nd.lock.Unlock()
-			c.connection.Receive(updates)
+			c.link.Receive(updates)
 			log.Println(c.nd.connectivity.Dump())
 		}()
 	}
@@ -179,7 +179,7 @@ func (c *connection) close() bool {
 
 		c.nd.lock.Lock()
 		defer c.nd.lock.Unlock()
-		c.connection.Close()
+		c.link.Close()
 
 		return true
 	}
