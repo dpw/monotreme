@@ -53,7 +53,7 @@ func (conn *Connection) Close() {
 
 func (c *Connectivity) connectionsChanged() {
 	c.version++
-	c.prop.Update(Update{Node: c.id, Version: c.version,
+	c.prop.Set(Update{Node: c.id, Version: c.version,
 		State: graph.SortNodeIDs(c.connNodeIDs())})
 	c.propagate()
 }
@@ -120,7 +120,7 @@ func (c *Connectivity) propagate() {
 	for _, b := range t.Undirected().Edges(c.id) {
 		conn := c.conns[b]
 		conn.buddy = true
-		if conn.HasUpdates() && conn.pending != nil {
+		if conn.HasOutgoing() && conn.pending != nil {
 			conn.pending()
 		}
 	}
@@ -128,7 +128,7 @@ func (c *Connectivity) propagate() {
 
 func (conn *Connection) SetPendingFunc(pending func()) {
 	conn.pending = pending
-	if conn.HasUpdates() && pending != nil {
+	if conn.HasOutgoing() && pending != nil {
 		pending()
 	}
 }
@@ -137,7 +137,7 @@ func (conn *Connection) Receive(updates []Update) {
 	news := false
 
 	for _, u := range updates {
-		if conn.Update(u) {
+		if conn.Incoming(u) {
 			news = true
 		}
 	}
@@ -147,12 +147,12 @@ func (conn *Connection) Receive(updates []Update) {
 	}
 }
 
-func (conn *Connection) UpdatesToSend() []Update {
+func (conn *Connection) Outgoing() []Update {
 	if !conn.buddy {
 		return nil
 	}
 
-	return conn.Neighbor.UpdatesToSend()
+	return conn.Neighbor.Outgoing()
 }
 
 // Dump the contents of a Connectivity to simple representation

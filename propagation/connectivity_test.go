@@ -116,7 +116,7 @@ func (s *sim) run(t *testing.T, rng *rand.Rand) {
 			continue
 		}
 
-		us := l.sender.UpdatesToSend()
+		us := l.sender.Outgoing()
 		if us != nil {
 			dbg(l.sender.c.id, "->", l.receiver.c.id, ":", us)
 			l.receiver.Receive(us)

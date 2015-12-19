@@ -116,7 +116,7 @@ func (c *connection) writeSide() error {
 }
 
 func (c *connection) writePending(w *writer) error {
-	updates := c.connection.UpdatesToSend()
+	updates := c.connection.Outgoing()
 	if updates != nil {
 		func() {
 			c.nd.lock.Lock()

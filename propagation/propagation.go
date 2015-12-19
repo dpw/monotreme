@@ -78,13 +78,13 @@ func (p *Propagation) update(u Update) *nodeState {
 }
 
 // Register an update.  Returns true if this update is news.
-func (p *Propagation) Update(u Update) bool {
+func (p *Propagation) Set(u Update) bool {
 	return p.update(u) != nil
 }
 
 // Register an update received from the neighbor.  Returns true if
 // this update is news.
-func (n *Neighbor) Update(u Update) bool {
+func (n *Neighbor) Incoming(u Update) bool {
 	ns := n.update(u)
 	if ns == nil {
 		return false
@@ -95,7 +95,7 @@ func (n *Neighbor) Update(u Update) bool {
 }
 
 // Get the updates pending for the neighbor
-func (n *Neighbor) UpdatesToSend() []Update {
+func (n *Neighbor) Outgoing() []Update {
 	var res []Update
 
 	for _, ns := range n.nodes {
@@ -108,7 +108,7 @@ func (n *Neighbor) UpdatesToSend() []Update {
 }
 
 // Are there pending updates for the neighbor?
-func (n *Neighbor) HasUpdates() bool {
+func (n *Neighbor) HasOutgoing() bool {
 	for _, ns := range n.nodes {
 		if !ns.delivered.Test(n.index) {
 			return true
