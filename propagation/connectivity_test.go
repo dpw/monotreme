@@ -116,11 +116,10 @@ func (s *sim) run(t *testing.T, rng *rand.Rand) {
 			continue
 		}
 
-		us := l.sender.Outgoing()
-		if us != nil {
-			dbg(l.sender.c.id, "->", l.receiver.c.id, ":", us)
-			l.receiver.Incoming(us)
-			l.sender.Delivered(us)
+		for prop, updates := range l.sender.Outgoing() {
+			dbg(l.sender.c.id, "->", l.receiver.c.id, ":", updates)
+			l.receiver.Incoming(l.receiver.c.ConnectivityPropagation(), updates)
+			l.sender.Delivered(prop, updates)
 		}
 	}
 

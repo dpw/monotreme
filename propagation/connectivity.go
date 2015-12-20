@@ -5,18 +5,21 @@ import (
 	. "github.com/dpw/monotreme/rudiments"
 )
 
-type Link struct {
-	c    *Connectivity
-	node NodeID
-	*Neighbor
-	treeLink bool
-	pending  func()
+type Connectivity struct {
+	id       NodeID
+	connProp *Propagation
+	props    []*Propagation
+	links    map[NodeID]*Link
 }
 
-type Connectivity struct {
-	id    NodeID
-	prop  *Propagation
-	links map[NodeID]*Link
+type Link struct {
+	c         *Connectivity
+	node      NodeID
+	neighbors map[*Propagation]*Neighbor
+	pending   func()
+
+	// pendingProps is non-nil when this is a tree link
+	pendingProps map[*Propagation]*Neighbor
 }
 
 func NewConnectivity(id NodeID) *Connectivity {
@@ -24,8 +27,12 @@ func NewConnectivity(id NodeID) *Connectivity {
 		id:    id,
 		links: make(map[NodeID]*Link),
 	}
-	c.prop = newPropagation(c.connectivityChange)
+	c.connProp = newPropagation(c.connectivityChange)
 	return c
+}
+
+func (c *Connectivity) ConnectivityPropagation() *Propagation {
+	return c.connProp
 }
 
 func (c *Connectivity) Link(node NodeID) *Link {
@@ -34,24 +41,33 @@ func (c *Connectivity) Link(node NodeID) *Link {
 	}
 
 	link := &Link{
-		c:        c,
-		node:     node,
-		Neighbor: c.prop.AddNeighbor(),
+		c:    c,
+		node: node,
+		neighbors: map[*Propagation]*Neighbor{
+			c.connProp: c.connProp.AddNeighbor(),
+		},
 	}
-	c.links[node] = link
 
+	for _, prop := range c.props {
+		link.neighbors[prop] = prop.AddNeighbor()
+	}
+
+	c.links[node] = link
 	c.linksChanged()
 	return link
 }
 
 func (link *Link) Close() {
-	link.Neighbor.Remove()
+	for _, neighbor := range link.neighbors {
+		neighbor.Remove()
+	}
+
 	delete(link.c.links, link.node)
 	link.c.linksChanged()
 }
 
 func (c *Connectivity) linksChanged() {
-	c.prop.Set(c.id, graph.SortNodeIDs(c.linkNodeIDs()))
+	c.connProp.Set(c.id, graph.SortNodeIDs(c.linkNodeIDs()))
 }
 
 func (c *Connectivity) linkNodeIDs() []NodeID {
@@ -65,7 +81,7 @@ func (c *Connectivity) linkNodeIDs() []NodeID {
 func (c *Connectivity) connectivityChange() {
 	// reachability prune
 	g := graph.ReachableGraph(c.id, func(node NodeID) []NodeID {
-		return c.prop.Get(node, []NodeID(nil)).([]NodeID)
+		return c.connProp.Get(node, []NodeID(nil)).([]NodeID)
 	})
 
 	// The graph g might not be symmetric, as we might hear that
@@ -110,37 +126,89 @@ func (c *Connectivity) connectivityChange() {
 	t := graph.MakeBushySpanningTree(g, pcn, 4)
 
 	for _, link := range c.links {
-		link.treeLink = false
+		link.pendingProps = nil
 	}
 
 	for _, b := range t.Undirected().Edges(c.id) {
-		link := c.links[b]
-		link.treeLink = true
-		if link.HasOutgoing() && link.pending != nil {
+		c.links[b].pendingProps = make(map[*Propagation]*Neighbor)
+	}
+
+	c.checkPending(c.connProp)
+}
+
+func (c *Connectivity) checkPending(prop *Propagation) {
+	// XXX store separate treeLink list
+	for _, link := range c.links {
+		if link.pending != nil && link.pendingProps != nil &&
+			link.checkPending(prop) {
 			link.pending()
 		}
 	}
 }
 
+func (link *Link) checkPending(prop *Propagation) bool {
+	n := link.neighbors[prop]
+	if !n.HasOutgoing() {
+		return false
+	}
+
+	if _, present := link.pendingProps[prop]; present {
+		return false
+	}
+
+	link.pendingProps[prop] = n
+	return true
+}
+
 func (link *Link) SetPendingFunc(pending func()) {
 	link.pending = pending
-	if pending != nil && link.treeLink && link.HasOutgoing() {
-		pending()
+	if pending != nil && link.pendingProps != nil {
+		p := false
+		for prop := range link.neighbors {
+			p = (p || link.checkPending(prop))
+		}
+
+		if p {
+			pending()
+		}
 	}
 }
 
-func (link *Link) Outgoing() []Update {
-	if !link.treeLink {
-		return nil
+func (link *Link) Outgoing() map[*Propagation][]Update {
+	res := make(map[*Propagation][]Update)
+	if link.pendingProps != nil {
+		for prop, n := range link.pendingProps {
+			o := n.Outgoing()
+			if o != nil {
+				res[prop] = o
+			}
+		}
 	}
 
-	return link.Neighbor.Outgoing()
+	return res
+}
+
+func (link *Link) Delivered(prop *Propagation, updates []Update) {
+	n := link.neighbors[prop]
+	if n != nil {
+		n.Delivered(updates)
+		if link.pendingProps != nil && !n.HasOutgoing() {
+			delete(link.pendingProps, prop)
+		}
+	}
+}
+
+func (link *Link) Incoming(prop *Propagation, updates []Update) {
+	n := link.neighbors[prop]
+	if n != nil {
+		n.Incoming(updates)
+	}
 }
 
 // Dump the contents of a Linkectivity to simple representation
 func (c *Connectivity) Dump() map[NodeID]interface{} {
 	res := make(map[NodeID]interface{})
-	for n, state := range c.prop.nodes {
+	for n, state := range c.connProp.nodes {
 		res[n] = state.Update.State
 	}
 	return res

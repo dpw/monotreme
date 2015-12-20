@@ -116,14 +116,16 @@ func (c *connection) writeSide() error {
 }
 
 func (c *connection) writePending(w *writer) error {
-	updates := c.link.Outgoing()
-	if updates != nil {
-		func() {
-			c.nd.lock.Lock()
-			defer c.nd.lock.Unlock()
-			writeConnectivityUpdates(w, updates)
-		}()
+	var propUpdates map[*propagation.Propagation][]propagation.Update
 
+	func() {
+		c.nd.lock.Lock()
+		defer c.nd.lock.Unlock()
+		propUpdates = c.link.Outgoing()
+	}()
+
+	for prop, updates := range propUpdates {
+		writeConnectivityUpdates(w, updates)
 		if err := w.Flush(); err != nil {
 			return err
 		}
@@ -131,7 +133,7 @@ func (c *connection) writePending(w *writer) error {
 		func() {
 			c.nd.lock.Lock()
 			defer c.nd.lock.Unlock()
-			c.link.Delivered(updates)
+			c.link.Delivered(prop, updates)
 		}()
 	}
 
@@ -166,7 +168,7 @@ func (c *connection) readSide() error {
 		func() {
 			c.nd.lock.Lock()
 			defer c.nd.lock.Unlock()
-			c.link.Incoming(updates)
+			c.link.Incoming(c.nd.connectivity.ConnectivityPropagation(), updates)
 			log.Println(c.nd.connectivity.Dump())
 		}()
 	}
