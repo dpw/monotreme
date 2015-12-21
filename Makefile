@@ -4,7 +4,7 @@ get_vendor_submodules=@if [ -z "$$(find vendor -type f -print -quit)" ] ; then g
 
 goprep:=GOPATH=$$PWD/build ; GO15VENDOREXPERIMENT=1 ; export GOPATH GO15VENDOREXPERIMENT ; rm -rf build/src/$(pkg) && mkdir -p $(dir build/src/$(pkg)) && ln -s $$PWD build/src/$(pkg) &&
 
-build/bin/node: $(shell find -name vendor -prune -o -name "*.go" -print)
+build/bin/node: $(shell find . -name vendor -prune -o -name "*.go" -print)
 	$(get_vendor_submodules)
 	$(goprep) cd build/src/$(pkg)/cmd && go install ./...
 

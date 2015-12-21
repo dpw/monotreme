@@ -11,6 +11,13 @@ import (
 func main() {
 	var bindAddr string
 	flag.StringVar(&bindAddr, "b", ":8080", "bind address")
+
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Synopsis:\n  %s [options] peer...\n\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Options:\n")
+		flag.PrintDefaults()
+	}
+
 	flag.Parse()
 
 	nd, err := comms.NewNodeDaemon(bindAddr)
