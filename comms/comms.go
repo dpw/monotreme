@@ -6,7 +6,6 @@ import (
 	"log"
 	"net"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/dpw/monotreme/propagation"
@@ -63,11 +62,11 @@ func (nd *NodeDaemon) Connect(addr string) error {
 }
 
 type connection struct {
-	nd     *NodeDaemon
-	conn   net.Conn
-	closed int32
-	cancel chan struct{}
-	toSend chan struct{}
+	nd        *NodeDaemon
+	conn      net.Conn
+	closeOnce sync.Once
+	cancel    chan struct{}
+	toSend    chan struct{}
 
 	// protected by the NodeDaemon lock
 	link *propagation.Link
@@ -175,7 +174,8 @@ func (c *connection) readSide() error {
 }
 
 func (c *connection) close() bool {
-	if atomic.CompareAndSwapInt32(&c.closed, 0, 1) {
+	closed := false
+	c.closeOnce.Do(func() {
 		c.conn.Close()
 		close(c.cancel)
 
@@ -183,8 +183,8 @@ func (c *connection) close() bool {
 		defer c.nd.lock.Unlock()
 		c.link.Close()
 
-		return true
-	}
+		closed = true
+	})
 
-	return false
+	return closed
 }
