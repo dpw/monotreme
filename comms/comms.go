@@ -1,6 +1,8 @@
 package comms
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"io"
 	"log"
 	"net"
@@ -9,6 +11,17 @@ import (
 	"github.com/dpw/monotreme/propagation"
 	. "github.com/dpw/monotreme/rudiments"
 )
+
+const GUID_LEN uint = 8
+
+func newNodeID() NodeID {
+	bs := make([]byte, GUID_LEN)
+	_, err := rand.Read(bs)
+	if err != nil {
+		panic("unable to get random bytes for NodeID")
+	}
+	return NodeID(hex.EncodeToString(bs))
+}
 
 type NodeDaemon struct {
 	us       NodeID
@@ -19,7 +32,7 @@ type NodeDaemon struct {
 }
 
 func NewNodeDaemon(bindAddr string) (*NodeDaemon, error) {
-	us := NewNodeID()
+	us := newNodeID()
 
 	l, err := net.Listen("tcp", bindAddr)
 	if err != nil {
