@@ -3,6 +3,7 @@ package comms
 import (
 	"bufio"
 	"encoding/binary"
+	"fmt"
 	"io"
 	"reflect"
 
@@ -14,11 +15,31 @@ var end = binary.LittleEndian
 
 type writer struct {
 	*bufio.Writer
-	err error
+	err     error
+	trailer [1]byte
 }
 
 func newWriter(w io.Writer) *writer {
-	return &writer{bufio.NewWriter(w), nil}
+	return &writer{bufio.NewWriter(w), nil, [1]byte{1}}
+}
+
+func step(counter *byte) {
+	// Bump the counter, skipping zero, as zeros are too common
+	// and easily misintepreted.
+	c := uint(*counter) + 1
+	*counter = byte(c + (c >> 8))
+}
+
+func (w *writer) endMessage() error {
+	if w.err == nil {
+		_, w.err = w.Write(w.trailer[:])
+		if w.err == nil {
+			step(&w.trailer[0])
+			w.err = w.Flush()
+		}
+	}
+
+	return w.err
 }
 
 func (w *writer) write(val interface{}) {
@@ -37,25 +58,39 @@ func (w *writer) writeArray(a interface{}, elemWriter func(*writer, interface{})
 	for i := 0; i < len; i++ {
 		elemWriter(w, av.Index(i).Interface())
 	}
-}
 
-func (w *writer) Flush() error {
-	if w.err == nil {
-		w.err = w.Writer.Flush()
-	}
-
-	return w.err
 }
 
 type reader struct {
 	*bufio.Reader
-	err error
+	err     error
+	counter byte
 }
 
 func newReader(r io.Reader) *reader {
-	return &reader{bufio.NewReader(r), nil}
+	return &reader{bufio.NewReader(r), nil, 1}
 }
 
+func (r *reader) endMessage() error {
+	if r.err != nil {
+		return r.err
+	}
+
+	var trailer [1]byte
+	_, r.err = r.Read(trailer[:])
+	if r.err != nil {
+		return r.err
+	}
+
+	if trailer[0] != r.counter {
+		r.err = fmt.Errorf("expected trailing byte %x, got %x",
+			r.counter, trailer[0])
+		return r.err
+	}
+
+	step(&r.counter)
+	return nil
+}
 func (r *reader) read(val interface{}) {
 	if r.err == nil {
 		r.err = binary.Read(r, end, val)

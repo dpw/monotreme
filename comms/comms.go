@@ -108,7 +108,7 @@ func (c *connection) writeSide() error {
 	w := newWriter(c.conn)
 
 	writeNodeID(w, c.nd.us)
-	if err := w.Flush(); err != nil {
+	if err := w.endMessage(); err != nil {
 		return err
 	}
 
@@ -136,7 +136,7 @@ func (c *connection) writePending(w *writer) error {
 
 	for prop, updates := range propUpdates {
 		writeConnectivityUpdates(w, updates)
-		if err := w.Flush(); err != nil {
+		if err := w.endMessage(); err != nil {
 			return err
 		}
 
@@ -154,8 +154,8 @@ func (c *connection) readSide() error {
 	r := newReader(c.conn)
 
 	them := readNodeID(r)
-	if r.err != nil {
-		return r.err
+	if err := r.endMessage(); err != nil {
+		return err
 	}
 
 	func() {
@@ -171,8 +171,8 @@ func (c *connection) readSide() error {
 
 	for {
 		updates := readConnectivityUpdates(r)
-		if r.err != nil {
-			return r.err
+		if err := r.endMessage(); err != nil {
+			return err
 		}
 
 		func() {
