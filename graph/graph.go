@@ -106,7 +106,13 @@ func (g Graph) Union(h Graph) Graph {
 	return Graph{
 		Nodes: unionNodeIDs(g.Nodes, h.Nodes),
 		Edges: func(n NodeID) []NodeID {
-			return unionNodeIDs(g.Edges(n), h.Edges(n))
+			ge := g.Edges(n)
+			he := h.Edges(n)
+			if ge == nil && he == nil {
+				return nil
+			} else {
+				return unionNodeIDs(ge, he)
+			}
 		},
 	}
 }
