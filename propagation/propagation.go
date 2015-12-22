@@ -5,6 +5,7 @@ import (
 	// doesn't support in-place bit setting.
 	"github.com/willf/bitset"
 
+	"github.com/dpw/monotreme/graph"
 	. "github.com/dpw/monotreme/rudiments"
 )
 
@@ -116,6 +117,27 @@ func (p *Propagation) addNodeState(u Update) *nodeState {
 	}
 
 	return ns
+}
+
+func (p *Propagation) prune(g graph.Graph) {
+	var removed []*nodeState
+
+	for node, ns := range p.nodes {
+		if g.Edges(node) == nil {
+			delete(p.nodes, node)
+			removed = append(removed, ns)
+		}
+	}
+
+	if len(removed) != 0 {
+		for _, n := range p.neighbors {
+			if n.undelivered != nil {
+				for _, ns := range removed {
+					delete(n.undelivered, ns)
+				}
+			}
+		}
+	}
 }
 
 func (n *Neighbor) setDelivered(ns *nodeState) {

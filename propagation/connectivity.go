@@ -119,7 +119,10 @@ func (c *Connectivity) connectivityChange() {
 
 	g = g.Intersect(g.Transpose()).Union(local)
 
-	// XXX Prune the propagation according to g
+	c.connProp.prune(g)
+	for _, p := range c.props {
+		p.prune(g)
+	}
 
 	// recompute spanning tree
 	pcn := graph.FindPseudoCentralNode(g, 10)
