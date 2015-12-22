@@ -1,12 +1,10 @@
 package comms
 
 import (
-	"fmt"
 	"io"
 	"log"
 	"net"
 	"sync"
-	"time"
 
 	"github.com/dpw/monotreme/propagation"
 	. "github.com/dpw/monotreme/rudiments"
@@ -21,7 +19,7 @@ type NodeDaemon struct {
 }
 
 func NewNodeDaemon(bindAddr string) (*NodeDaemon, error) {
-	us := NodeID(fmt.Sprint(time.Now().UnixNano())) // XXX
+	us := NewNodeID()
 
 	l, err := net.Listen("tcp", bindAddr)
 	if err != nil {
