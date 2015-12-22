@@ -125,12 +125,20 @@ func (c *Connectivity) connectivityChange() {
 	pcn := graph.FindPseudoCentralNode(g, 10)
 	t := graph.MakeBushySpanningTree(g, pcn, 4)
 
-	for _, link := range c.links {
-		link.pendingProps = nil
+	treeLinks := make(map[NodeID]struct{})
+	for _, n := range t.Undirected().Edges(c.id) {
+		treeLinks[n] = struct{}{}
 	}
 
-	for _, b := range t.Undirected().Edges(c.id) {
-		c.links[b].pendingProps = make(map[*Propagation]*Neighbor)
+	for n, link := range c.links {
+		if _, present := treeLinks[n]; present {
+			link.pendingProps = make(map[*Propagation]*Neighbor)
+		} else {
+			link.pendingProps = nil
+			for _, neighbor := range link.neighbors {
+				neighbor.deactivate()
+			}
+		}
 	}
 
 	c.checkPending(c.connProp)

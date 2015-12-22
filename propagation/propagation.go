@@ -18,12 +18,20 @@ type Update struct {
 
 type nodeState struct {
 	Update
+
+	// Records to which neighbors this state has been delivered.
 	delivered bitset.BitSet
 }
 
 type Neighbor struct {
 	*Propagation
 	index uint
+
+	// Updates that have yet to be delivered to this neighbor.
+	// This is just a cache for the nodeState delivered bits, so
+	// we don't have to search to find updates pending for a
+	// neighbor.
+	undelivered map[*nodeState]struct{}
 }
 
 type Propagation struct {
@@ -64,17 +72,68 @@ func (n *Neighbor) Remove() {
 	}
 
 	n2.index = n.index
+	n.index = ^uint(0)
+}
+
+func (n *Neighbor) activate() {
+	if n.undelivered != nil {
+		return
+	}
+
+	undelivered := make(map[*nodeState]struct{})
+	for _, ns := range n.nodes {
+		if !ns.delivered.Test(n.index) {
+			undelivered[ns] = struct{}{}
+		}
+	}
+
+	n.undelivered = undelivered
+}
+
+func (n *Neighbor) deactivate() {
+	n.undelivered = nil
+}
+
+func (p *Propagation) clearDelivered(ns *nodeState) {
+	del := &ns.delivered
+	for i, e := del.NextSet(0); e; i, e = del.NextSet(i + 1) {
+		n := p.neighbors[i]
+		if n.undelivered != nil {
+			n.undelivered[ns] = struct{}{}
+		}
+		del.Clear(i)
+	}
+}
+
+func (p *Propagation) addNodeState(u Update) *nodeState {
+	ns := &nodeState{Update: u}
+	p.nodes[u.Node] = ns
+
+	for _, n := range p.neighbors {
+		if n.undelivered != nil {
+			n.undelivered[ns] = struct{}{}
+		}
+	}
+
+	return ns
+}
+
+func (n *Neighbor) setDelivered(ns *nodeState) {
+	if n.undelivered != nil {
+		delete(n.undelivered, ns)
+	}
+	ns.delivered.Set(n.index)
 }
 
 // Register an update.  Returns true if this update is news.
 func (p *Propagation) Set(n NodeID, state interface{}) {
 	ns := p.nodes[n]
 	if ns == nil {
-		p.nodes[n] = &nodeState{Update: Update{n, 0, state}}
+		p.addNodeState(Update{n, 0, state})
 	} else {
 		ns.Version++
 		ns.State = state
-		ns.delivered.ClearAll()
+		p.clearDelivered(ns)
 	}
 
 	p.onChange()
@@ -88,16 +147,15 @@ func (n *Neighbor) Incoming(updates []Update) {
 	for _, u := range updates {
 		ns := n.nodes[u.Node]
 		if ns == nil {
-			ns = &nodeState{Update: u}
-			n.nodes[u.Node] = ns
+			ns = n.addNodeState(u)
 		} else if ns.Version >= u.Version {
 			continue
 		} else {
 			ns.Update = u
-			ns.delivered.ClearAll()
+			n.clearDelivered(ns)
 		}
 
-		ns.delivered.Set(n.index)
+		n.setDelivered(ns)
 		news = true
 	}
 
@@ -108,12 +166,11 @@ func (n *Neighbor) Incoming(updates []Update) {
 
 // Get the updates pending for the neighbor
 func (n *Neighbor) Outgoing() []Update {
+	n.activate()
 	var res []Update
 
-	for _, ns := range n.nodes {
-		if !ns.delivered.Test(n.index) {
-			res = append(res, ns.Update)
-		}
+	for ns := range n.undelivered {
+		res = append(res, ns.Update)
 	}
 
 	return res
@@ -121,13 +178,8 @@ func (n *Neighbor) Outgoing() []Update {
 
 // Are there pending updates for the neighbor?
 func (n *Neighbor) HasOutgoing() bool {
-	for _, ns := range n.nodes {
-		if !ns.delivered.Test(n.index) {
-			return true
-		}
-	}
-
-	return false
+	n.activate()
+	return len(n.undelivered) > 0
 }
 
 // Register delivery of some updates to the neighbor
@@ -135,7 +187,7 @@ func (n *Neighbor) Delivered(updates []Update) {
 	for _, u := range updates {
 		ns := n.nodes[u.Node]
 		if ns != nil && ns.Version == u.Version {
-			ns.delivered.Set(n.index)
+			n.setDelivered(ns)
 		}
 	}
 }
